@@ -5,13 +5,15 @@ defmodule BetUnfair do
   import Bet
 
   def init(pid) do
+    table = :dets.open_file(:usuario, [type: :set])
+    table2 = :dets.open_file(:mercado, [type: :set])
+    table3 = :dets.open_file(:apuesta, [type: :set])
     {:ok, pid}
   end
 
 
   # @spec start_link(name :: string()) :: {:ok, _}
   def start_link(name) do
-    table = :ets.new(:usuario, [:named_table])
     Process.put(:server, name)
     GenServer.start_link(BetUnfair, {}, name: name)
   end
@@ -24,6 +26,7 @@ defmodule BetUnfair do
   # @spec clean(name :: string()):: :ok
   def clean(name) do
     :ets.delete(:usuario)
+    :ets.delete(:mercado)
     GenServer.stop(GenServer.server())
   end
 

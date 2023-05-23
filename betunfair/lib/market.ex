@@ -29,14 +29,14 @@ defmodule Market do
   end
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
-  def handle_call({:market_pending_backs, id}, _) do
+  def handle_call({:market_pending_backs, id}, _, state) do
   end
 
   # @spec market_pending_lays(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
-  def handle_call({:market_pending_lays, id}, _) do
+  def handle_call({:market_pending_lays, id}, _, state) do
   end
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
-  def handle_call({:market_get, id}, _) do
+  def handle_call({:market_get, id}, _, state) do
   end
 end

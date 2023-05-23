@@ -35,10 +35,16 @@ defmodule Market do
 
   # @spec market_pending_lays(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
   def handle_call({:market_pending_lays, id}, _, state) do
+
   end
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
   def handle_call({:market_get, id}, _, state) do
     {:ok, ets.select(:market, id)}
+  end
+
+  # @spec market_match(id :: market_id()):: :ok
+  def handle_call({:market_match, id}, _, state) do
+
   end
 end

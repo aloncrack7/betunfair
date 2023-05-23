@@ -38,5 +38,6 @@ defmodule Market do
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
   def handle_call({:market_get, id}, _, state) do
+    {:ok, ets.select(:market, id)}
   end
 end

@@ -1,5 +1,6 @@
 defmodule BetunfairTest do
   use ExUnit.Case
+  import Bet
 
   test "user_create_deposit_get" do
     assert {:ok,_} = Betunfair.clean("testdb")
@@ -321,6 +322,28 @@ defmodule BetunfairTest do
     assert is_ok(Betunfair.market_settle(m1,false))
     assert {:ok,%{balance: 1800}} = Betunfair.user_get(u1)
     assert {:ok,%{balance: 2200}} = Betunfair.user_get(u2)
+  end
+
+  test "insertIntoPlace" do
+    assert Bet.insertInPlace([{"a", 1, 2}, {"b", 1, 3}], {"c", 1, 4},
+    fn({_, _, odds_old}, {_, _, odds_new}) ->
+      odds_old<=odds_new
+    end)==[{"a", 1, 2}, {"b", 1, 3}, {"c", 1, 4}]
+
+    assert Bet.insertInPlace([{"a", 1, 2}, {"b", 1, 3}], {"c", 1, 2},
+    fn({_, _, odds_old}, {_, _, odds_new}) ->
+      odds_old<=odds_new
+    end)==[{"a", 1, 2}, {"c", 1, 2}, {"b", 1, 3}]
+
+    assert Bet.insertInPlace([{"b", 1, 3}, {"a", 1, 2}], {"c", 1, 4},
+    fn({_, _, odds_old}, {_, _, odds_new}) ->
+      odds_old>=odds_new
+    end)==[{"c", 1, 4}, {"b", 1, 3}, {"a", 1, 2}]
+
+    assert Bet.insertInPlace([{"b", 1, 3}, {"a", 1, 2}], {"c", 1, 2},
+    fn({_, _, odds_old}, {_, _, odds_new}) ->
+      odds_old>=odds_new
+    end)==[{"b", 1, 3}, {"a", 1, 2}, {"c", 1, 2}]
   end
 
   defp is_error(:error),do: true

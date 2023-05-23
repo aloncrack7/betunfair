@@ -335,7 +335,7 @@ defmodule BetunfairTest do
       odds_old<=odds_new
     end)==[{"a", 1, 2}, {"c", 1, 2}, {"b", 1, 3}]
 
-    assert Bet.insertInPlace([{"b", 1, 3}, {"a", 1, 2}], {"c", 1, 4},
+    assert Bet.insertInPlace(user_lookup,, {"c", 1, 4},
     fn({_, _, odds_old}, {_, _, odds_new}) ->
       odds_old>=odds_new
     end)==[{"c", 1, 4}, {"b", 1, 3}, {"a", 1, 2}]

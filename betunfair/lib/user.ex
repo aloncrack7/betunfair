@@ -6,10 +6,17 @@ defmodule User do
     {:ok, pid}
   end
 
-  #@spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
-  def handle_call({:user_create, id, name}, _, state) do
+  def handle_call({:user_create, id, name}, _, {users, bets}) do
+    size = CubDB.size(users) + 1
+    user_id = "u" <> Integer.to_string(size)
+    allusers = CubDB.select(users)
+    case Enum.to_list(Stream.filter(allusers, fn {_, {x, _, _}} -> x == id end)) do
+      [] ->
+        CubDB.put(users, user_id, {id, name, 0})
+        {:reply, {:ok, user_id}, {users, bets}}
+      _ -> {:reply, {:error, "Given id already exists"}, {users, bets}}
+    end
   end
-
   #@spec user_deposit(id :: user_id(), amount :: integer()) :: :ok
   def handle_call({:user_deposit, id, amount}, _, state) do
 
@@ -29,5 +36,11 @@ defmodule User do
   def handle_call({:user_bets, id}, _, state) do
 
   end
+
+
+  defp check_entries(user, id) do
+    Enum
+  end
+
 
 end

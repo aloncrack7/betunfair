@@ -12,7 +12,7 @@ defmodule BetUnfair do
 
     GenServer.start_link(User, {users, bets}, name: :users_server)
     GenServer.start_link(Market, {markets, bets}, name: :markets_server)
-    GenServer.start_link(Bet, {bets}, name: :bets_server)
+    GenServer.start_link(Bet, {users, markets, bets}, name: :bets_server)
 
     {:ok, pid}
   end

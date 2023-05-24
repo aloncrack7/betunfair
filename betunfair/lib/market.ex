@@ -8,7 +8,22 @@ defmodule Market do
 
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id}
   def handle_call({:market_create, name, description}, _, state) do
+    market = %{name: name, description: description, status: :active}
+    {markets, _} = state
+    size = CubDB.size(markets) + 1
+    num = Integer.to_string(size)
+    id = "m" <> num
 
+    entries = CubDB.select(markets)
+
+    result = Enum.all?(entries, fn {_, value} -> value[:name] != name end)
+
+    if not result do
+      {:reply, {:error, "El nombre del mercado ya existe"}, state}
+    else
+      CubDB.put_new(markets, id, market)
+      {:reply, {:ok, id}, state}
+    end
   end
 
   # @spec market_list():: {:ok, [market_id()]}

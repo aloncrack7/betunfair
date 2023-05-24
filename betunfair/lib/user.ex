@@ -1,7 +1,13 @@
 defmodule User do
+  import CubDB
+  use GenServer
+
+  def init(pid) do
+    {:ok, pid}
+  end
+
   #@spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
   def handle_call({:user_create, id, name}, _, state) do
-
   end
 
   #@spec user_deposit(id :: user_id(), amount :: integer()) :: :ok

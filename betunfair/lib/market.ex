@@ -1,4 +1,11 @@
 defmodule Market do
+  import CubDB
+  use GenServer
+
+  def init(pid) do
+    {:ok, pid}
+  end
+
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id}
   def handle_call({:market_create, name, description}, _, state) do
 

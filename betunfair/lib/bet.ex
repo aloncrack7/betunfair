@@ -1,4 +1,11 @@
 defmodule Bet do
+  import CubDB
+  use GenServer
+
+  def init(pid) do
+    {:ok, pid}
+  end
+
   def insertInPlace([], bet, _) do
     [bet]
   end

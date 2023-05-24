@@ -18,8 +18,18 @@ defmodule User do
     end
   end
   #@spec user_deposit(id :: user_id(), amount :: integer()) :: :ok
-  def handle_call({:user_deposit, id, amount}, _, state) do
-
+  def handle_call({:user_deposit, id, amount}, _, {users, bets}) do
+    case CubDB.has_key?(users, id) do
+      true ->
+          case amount >= 0 do
+            true ->
+              {userid, name, balance} = CubDB.get(users, id, :default)
+              CubDB.put(users, id, {userid, name, balance + amount})
+              {:reply, :ok, {users, bets}}
+            false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
+          end
+      false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
+    end
   end
 
   #@spec user_withdraw(id :: user_id(), amount :: integer()):: :ok

@@ -28,6 +28,12 @@ defmodule Market do
 
   # @spec market_list():: {:ok, [market_id()]}
   def handle_call(:market_list, _, state) do
+    {markets, _} = state
+
+    entries = CubDB.select(markets)
+    results = Enum.map(entries, fn entry -> elem(entry, 0) end)
+
+    {:reply, {:ok, results}, state}
   end
 
   # @spec market_list_active():: {:ok, [market_id()]}

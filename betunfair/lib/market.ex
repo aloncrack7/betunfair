@@ -8,8 +8,8 @@ defmodule Market do
 
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id}
   def handle_call({:market_create, name, description}, _, state) do
-    market = %{name: name, description: description, status: :active}
-    {markets, _} = state
+    market = %{name: name, description: description, status: :active, bets: %{back: [%{user_id: "u1", original_stake: 10, status: :active}], lay: [%{user_id: "u1", original_stake: 5, status: :active}], cancel: [%{"user_id": "u2", original_stake: 3, status: :active}]}}
+    {_, markets, _} = state
     size = CubDB.size(markets) + 1
     num = Integer.to_string(size)
     id = "m" <> num
@@ -28,7 +28,7 @@ defmodule Market do
 
   # @spec market_list():: {:ok, [market_id()]}
   def handle_call(:market_list, _, state) do
-    {markets, _} = state
+    {_, markets, _} = state
 
     entries = CubDB.select(markets)
     results = Enum.map(entries, fn entry -> elem(entry, 0) end)
@@ -38,7 +38,7 @@ defmodule Market do
 
   # @spec market_list_active():: {:ok, [market_id()]}
   def handle_call(:market_list_active, _, state) do
-    {markets, _} = state
+    {_, markets, _} = state
 
     entries = CubDB.select(markets)
 
@@ -49,6 +49,38 @@ defmodule Market do
 
   # @spec market_cancel(id :: market_id()):: :ok
   def handle_call({:market_cancel, id}, _, state) do
+    # {users, markets, _} = state
+
+    # market = CubDB.get(markets, id)
+    # bets = markets[:bets]
+    # back = bets[:back]
+    # lay = bets[:lay]
+    # cancel = bets[:cancel]
+
+    # back = Enum.map(back, fn map -> %{map | status: :market_cancelled} end)
+
+    # user = CubDB.get(users, x[:user_id])
+    # user[:balance] = user[:balance] + x[:original_stake]
+    # CubDB.put(users, x[:user_id], user)
+
+    # {:reply, back, state}
+
+    # lay = Enum.map(lay, fn x ->
+    #   x[:status] = :market_cancelled
+    #   user = CubDB.get(users, x[:user_id])
+    #   user[:balance] = user[:balance] + x[:original_stake]
+    #   CubDB.put(users, x[:user_id], user)
+    # end
+    # )
+
+    # cancel = Enum.map(cancel, fn x ->
+    #   x[:status] = :market_cancelled
+    #   user = CubDB.get(users, x[:user_id])
+    #   user[:balance] = user[:balance] + x[:original_stake]
+    #   CubDB.put(users, x[:user_id], user)
+    # end
+    # )
+
   end
 
   # @spec market_freeze(id :: market_id()):: :ok

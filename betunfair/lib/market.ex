@@ -38,6 +38,13 @@ defmodule Market do
 
   # @spec market_list_active():: {:ok, [market_id()]}
   def handle_call(:market_list_active, _, state) do
+    {markets, _} = state
+
+    entries = CubDB.select(markets)
+
+    results = Enum.map(entries, fn {id, value} -> if value[:status] == :active do id end end)
+
+    {:reply, {:ok, results}, state}
   end
 
   # @spec market_cancel(id :: market_id()):: :ok

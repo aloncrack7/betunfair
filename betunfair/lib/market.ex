@@ -49,38 +49,42 @@ defmodule Market do
 
   # @spec market_cancel(id :: market_id()):: :ok
   def handle_call({:market_cancel, id}, _, state) do
-    # {users, markets, _} = state
+    {users, markets, _} = state
 
-    # market = CubDB.get(markets, id)
-    # bets = markets[:bets]
-    # back = bets[:back]
-    # lay = bets[:lay]
-    # cancel = bets[:cancel]
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
 
-    # back = Enum.map(back, fn map -> %{map | status: :market_cancelled} end)
+    back = Enum.map(back, fn map ->
+      user = CubDB.get(users, map[:user_id])
+      Map.put(user, :balance, user[:balance] + map[:original_stake])
+      CubDB.put(users, map[:user_id], user)
+      Map.put(map, :status, :market_cancelled)
+    end)
+    bets = Map.put(bets, :back, back)
 
-    # user = CubDB.get(users, x[:user_id])
-    # user[:balance] = user[:balance] + x[:original_stake]
-    # CubDB.put(users, x[:user_id], user)
+    lay = Enum.map(lay, fn map ->
+      user = CubDB.get(users, map[:user_id])
+      Map.put(user, :balance, user[:balance] + map[:original_stake])
+      CubDB.put(users, map[:user_id], user)
+      Map.put(map, :status, :market_cancelled)
+    end)
+    bets = Map.put(bets, :lay, lay)
 
-    # {:reply, back, state}
+    cancel = Enum.map(cancel, fn map ->
+      user = CubDB.get(users, map[:user_id])
+      Map.put(user, :balance, user[:balance] + map[:original_stake])
+      CubDB.put(users, map[:user_id], user)
+      Map.put(map, :status, :market_cancelled)
+    end)
+    bets = Map.put(bets, :cancel, cancel)
 
-    # lay = Enum.map(lay, fn x ->
-    #   x[:status] = :market_cancelled
-    #   user = CubDB.get(users, x[:user_id])
-    #   user[:balance] = user[:balance] + x[:original_stake]
-    #   CubDB.put(users, x[:user_id], user)
-    # end
-    # )
+    market = Map.put(market, :bets, bets)
+    CubDB.put(markets, id, market)
 
-    # cancel = Enum.map(cancel, fn x ->
-    #   x[:status] = :market_cancelled
-    #   user = CubDB.get(users, x[:user_id])
-    #   user[:balance] = user[:balance] + x[:original_stake]
-    #   CubDB.put(users, x[:user_id], user)
-    # end
-    # )
-
+    {:reply, :ok, state}
   end
 
   # @spec market_freeze(id :: market_id()):: :ok

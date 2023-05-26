@@ -55,7 +55,12 @@ defmodule User do
 
   #@spec user_get(id :: user_id()) :: {:ok, %{name: string(), id: user_id(), balance: integer()}}
   def handle_call({:user_get, id}, _, {users, bets}) do
-
+    case CubDB.has_key?(users, id) do
+      true ->
+        userinfo = CubDB.get(users, id, :default)
+        {:reply, {:ok, userinfo}, {users, bets}}
+      false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
+    end
   end
 
   #@spec user_bets(id :: user_id()) :: Enumerable.t(bet_id())

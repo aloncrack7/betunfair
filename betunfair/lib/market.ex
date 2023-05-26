@@ -211,7 +211,7 @@ defmodule Market do
 
   # @spec market_bets(id :: market_id()) :: {:ok, Enumerable.t(bet_id())}
   def handle_call({:market_bets, id}, _, state) do
-    {users, markets, _} = state
+    {_, markets, _} = state
 
     market = CubDB.get(markets, id)
     bets = market[:bets]
@@ -229,20 +229,56 @@ defmodule Market do
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
   def handle_call({:market_pending_backs, id}, _, state) do
+    {_, markets, _} = state
+
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
+
+    back_results = Enum.filter(back, fn bet ->
+      Enum.empty?(bet[:matched_bets]) == true
+    end)
+    back_results = Enum.map(back_results, fn bet ->
+      {bet[:odds], bet[:bet_id]}
+    end)
+
+    {:reply, back_results, state}
   end
 
   # @spec market_pending_lays(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
   def handle_call({:market_pending_lays, id}, _, state) do
+    {_, markets, _} = state
 
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
+
+    lay_results = Enum.filter(lay, fn bet ->
+      Enum.empty?(bet[:matched_bets]) == true
+    end)
+    lay_results = Enum.map(lay_results, fn bet ->
+      {bet[:odds], bet[:bet_id]}
+    end)
+
+    {:reply, lay_results, state}
   end
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
   def handle_call({:market_get, id}, _, state) do
-    {:ok, :dets.select(:market, id)}
+    {_, markets, _} = state
+
+    market = CubDB.get(markets, id)
+
+    market = Map.delete(market, :bets)
+
+    {:reply, {:ok, market}, state}
   end
 
   # @spec market_match(id :: market_id()):: :ok
   def handle_call({:market_match, id}, _, state) do
-
   end
 end

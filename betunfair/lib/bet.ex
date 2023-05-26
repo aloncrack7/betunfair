@@ -17,75 +17,94 @@ defmodule Bet do
     end
   end
 
-  def insert_bet(bet_type, user_id, market_id, stake, odds) do
-    case :dets.lookup(:users, user_id) do
-      [_] ->
-        case :dets.lookup(:markets, market_id) do
-          [_] ->
-            bet_id={"#{user_id}", "#{market_id}", "#{bet_type}", "#{DateTime.utc_now()}"}
-            {back_bets, lay_bets}=:dets.lookup(:bets, market_id)[market_id]
+  def insert_bet(bet_type, user_id, market_id, stake, odds, bets) do
+    case CubDB.get(users, user_id) do
+      user ->
+        market=CubDB.get(markets, market_id)
+        case market[:state] do
+          :open ->
+            bet_id=%{user_id: user_id, market_id: market_id, time: "#{DateTime.utc_now()}"}
+            bet=%{bet_id: bet_id,
+              bet_type: bet_type,
+              market_id: market_id,
+              user_id: user_id,
+              odds: odds,
+              original_stake: stake,
+              remaining_stake: stake,
+              matched_bets: [],
+              status: :active}
+
             case bet_type do
               :back ->
-                new_back_bets=insertInPlace(back_bets, {bet_id, user_id, stake, odds},
-                  fn({_, _, _, odds_old}, {_, _, _, odds_new}) ->
-                    odds_old<=odds_new
+                new_back_bets=
+                  insertInPlace(market[:state][:back], bet,
+                  fn(old, new) ->
+                    old[odds]<=new[odds]
                   end)
-                :dets.insert(:bets, {market_id, {new_back_bets, lay_bets}})
+                CubDB.put(bets, market_id, Map.put(market[:state], :back, new_back_bets))
               :lay ->
-                new_lay_bets=insertInPlace(lay_bets, {bet_id, user_id, stake, odds},
-                  fn({_, _, _, odds_old}, {_, _, _, odds_new}) ->
-                    odds_old>=odds_new
+                new_lay_bets=insertInPlace(market[:state][:lay], bet,
+                  fn(old, new) ->
+                    old[odds]>=new[odds]
                   end)
-                :dets.insert(:bets, {market_id, {back_bets, new_lay_bets}})
+                CubDB.put(bets, market_id, Map.put(market[:state], :lay, new_lay_bets))
             end
-            {:reply, bet_id}
+
+            {:reply, bet_id, bets}
+          nil ->
+            {:reply, {:error, "There is no market #{market_id}"}, bets}
           _ ->
-            {:reply, {:error, "There is no market #{market_id}"}}
+            {:reply, {:error, "The market is not open"}, bets}
         end
       _ ->
-        {:reply, {:error, "There is no user #{user_id}"}}
+        {:reply, {:error, "There is no user #{user_id}"}, bets}
     end
-  end
-
-  def deleteFrom([], _) do
-    []
-  end
-
-  def deleteFrom([{key, _, _, _}|t], {key, _, _, _}) do
-    [t]
-  end
-
-  def deleteFrom([h|t], x) do
-    [h|deleteFrom(t, x)]
   end
 
   # @spec bet_back(user_id :: user_id, market_id :: market_id, stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def handle_call({:bet_back, user_id, market_id, stake, odds}, _, state) do
-    insert_bet(:back, user_id, market_id, stake, odds)
+    insert_bet(:back, user_id, market_id, stake, odds, state)
   end
 
   # @spec bet_lay(user_id :: user_id(), market_id :: market_id(), stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def handle_call({:bet_lay, user_id, market_id, stake, odds}, _, state) do
-    insert_bet(:lay, user_id, market_id, stake, odds)
+    insert_bet(:lay, user_id, market_id, stake, odds, state)
   end
 
   # @spec bet_cancel(id :: bet_id()):: :ok
-  def handle_call({:bet_cancel, bet_id}, _, state) do
-    {user_id, market_id, bet_type, _}=bet_id
-    {back_bets, lay_bets}=:dets.lookup(:bets, market_id)[market_id]
+  def handle_call({:bet_cancel, bet_id}, _, bets) do
+    market=CubDB.get(markets, bet_id[:market_id])
 
-    case bet_type do
-      "back_bet" ->
-        :dets.insert(:bets, {market_id, {deletFrom(back_bets, bet_id), lay_bets}})
-      "lay_bet" ->
-        :dets.insert(:bets, {market_id, {back_bets, deleteFrom(lay_bets, bet_id)}})
+    case market[:state] do
+      :open ->
+        elem=Enum.filter(market[:bets][:back]++market[:bets][:lay], fn (x) -> x[:bet_id]==bet_id end)
+        |>Enum.at(0)
+        |>Map.put(:bet_type, :cancel)
+
+        cancel_list=elem++market[:bets][:cancel]
+
+        back_list=List.delete(market[:bets][:back], fn (x) -> x[:bet_id]==bet_id end)
+        lay_list=List.delete(market[:bets][:lay], fn (x) -> x[:bet_id]==bet_id end)
+
+        bet_map=%{back: back_list, lay: lay_list, cancel: cancel_list}
+
+        market=Map.put(market, :bets, bet_map)
+        CubDB.put(markets, bet_id[:market_id], market)
+
+        {:reply, :ok, bets}
+      _ ->
+        {:reply, {:error, "The market #{bet_id} is not open"}, bets}
     end
-
-    {:reply, :ok, state}
   end
 
   # @spec bet_get(id :: bet_id()) :: {:ok, %{bet_type: :back | :lay, market_id: market_id(), user_id: user_id(), odds: integer(), original_stake: integer(), remaining_stake: integer(), matched_bets: [bet_id()], status: :active | :cancelled | :market_cancelled | {:market_settled, boolean()}}}
-  def handle_call({:bet_get, id}, _, state) do
+  def handle_call({:bet_get, bet_id}, _, bets) do
+    market=CubDB.get(markets, bet_id[:market_id])
 
+    elem=Enum.filter(market[:bets][:back]++market[:bets][:lay]++market[:bets][:cancel],
+    fn (x) -> x[:bet_id]==bet_id end)
+    |>Enum.at(0)
+    |>Map.delete(:bet_id)
+    {:reply, {:ok, elem}, bets}
   end
 end

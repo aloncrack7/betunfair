@@ -59,29 +59,35 @@ defmodule Market do
     cancel = bets[:cancel]
 
     # modify the status bets from the back list and returning all the money to the users
-    back = Enum.map(back, fn map ->
-      user = CubDB.get(users, map[:user_id])
-      Map.put(user, :balance, user[:balance] + map[:original_stake])
-      CubDB.put(users, map[:user_id], user)
-      Map.put(map, :status, :market_cancelled)
+    back = Enum.map(back, fn bet ->
+      user = CubDB.get(users, bet[:user_id])
+      user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+      CubDB.put(users, bet[:user_id], user)
+      bet = Map.put(bet, :status, :market_cancelled)
+      CubDB.put(bets, bet[:bet_id], bet)
+      bet
     end)
     bets = Map.put(bets, :back, back)
 
     # modify the status bets from the lay list and returning all the money to the users
-    lay = Enum.map(lay, fn map ->
-      user = CubDB.get(users, map[:user_id])
-      Map.put(user, :balance, user[:balance] + map[:original_stake])
-      CubDB.put(users, map[:user_id], user)
-      Map.put(map, :status, :market_cancelled)
+    lay = Enum.map(lay, fn bet ->
+      user = CubDB.get(users, bet[:user_id])
+      user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+      CubDB.put(users, bet[:user_id], user)
+      bet = Map.put(bet, :status, :market_cancelled)
+      CubDB.put(bets, bet[:bet_id], bet)
+      bet
     end)
     bets = Map.put(bets, :lay, lay)
 
     # modify the status bets from the cancel list and returning all the money to the users
-    cancel = Enum.map(cancel, fn map ->
-      user = CubDB.get(users, map[:user_id])
-      Map.put(user, :balance, user[:balance] + map[:original_stake])
-      CubDB.put(users, map[:user_id], user)
-      Map.put(map, :status, :market_cancelled)
+    cancel = Enum.map(cancel, fn bet ->
+      user = CubDB.get(users, bet[:user_id])
+      user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+      CubDB.put(users, bet[:user_id], user)
+      bet = Map.put(bet, :status, :market_cancelled)
+      CubDB.put(bets, bet[:bet_id], bet)
+      bet
     end)
     bets = Map.put(bets, :cancel, cancel)
 
@@ -103,30 +109,30 @@ defmodule Market do
     cancel = bets[:cancel]
 
     # returning all the back bets money to the users who didnt match a bet
-    Enum.map(back, fn map ->
-      matched_bets = map[:matched_bets]
+    Enum.map(back, fn bet ->
+      matched_bets = bet[:matched_bets]
       if Enum.empty?(matched_bets) do
-        user = CubDB.get(users, map[:user_id])
-        Map.put(user, :balance, user[:balance] + map[:original_stake])
-        CubDB.put(users, map[:user_id], user)
+        user = CubDB.get(users, bet[:user_id])
+        user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+        CubDB.put(users, bet[:user_id], user)
       end
     end)
 
     # returning all the lay bets money to the users who didnt match a bet
-    Enum.map(lay, fn map ->
-      matched_bets = map[:matched_bets]
+    Enum.map(lay, fn bet ->
+      matched_bets = bet[:matched_bets]
       if Enum.empty?(matched_bets) do
-        user = CubDB.get(users, map[:user_id])
-        Map.put(user, :balance, user[:balance] + map[:original_stake])
-        CubDB.put(users, map[:user_id], user)
+        user = CubDB.get(users, bet[:user_id])
+        user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+        CubDB.put(users, bet[:user_id], user)
       end
     end)
 
     # returning all the cancelled bets money to the users who didnt match a bet
-    Enum.map(cancel, fn map ->
-      user = CubDB.get(users, map[:user_id])
-      Map.put(user, :balance, user[:balance] + map[:original_stake])
-      CubDB.put(users, map[:user_id], user)
+    Enum.map(cancel, fn bet ->
+      user = CubDB.get(users, bet[:user_id])
+      user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
+      CubDB.put(users, bet[:user_id], user)
     end)
 
     market = Map.put(market, :status, :frozen)
@@ -137,11 +143,87 @@ defmodule Market do
 
   # @spec market_settle(id :: market_id(), result :: boolean()) :: :ok
   def handle_call({:market_settle, id, result}, _, state) do
+    {users, markets, bets} = state
+
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
+
+    if result == true do # back wins
+      # ------------------- BACK RETURNS (WINNING)------------------- #
+      back = Enum.map(back, fn bet ->
+        user = CubDB.get(users, bet[:user_id])
+        user = Map.put(user, :balance, user[:balance] + ((bet[:original_stake]-bet[:remaining_stake])*bet[:odds]))
+        CubDB.put(users, bet[:user_id], user)
+
+        Map.enum(bet[:matched_bets], fn bet_id ->
+          matched_bet = CubDB.get(bets, bet_id)
+          user = Map.put(user, :balance, user[:balance] + (matched_bet[:original_stake]*bet[:odds]))
+          CubDB.put(users, bet[:user_id], user)
+        end)
+
+        bet = Map.put(bet, :status, {:market_settled, result})
+        CubDB.put(bets, bet[:bet_id], bet)
+        bet
+      end)
+      bets = Map.put(bets, :back, back)
+
+      # ------------------- LAY RETURNS (LOOSING)------------------- #
+      lay = Enum.map(lay, fn bet ->
+        bet = Map.put(bet, :status, {:market_settled, result})
+        CubDB.put(bets, bet[:bet_id], bet)
+        bet
+      end)
+      bets = Map.put(bets, :lay, lay)
+    else # lay wins
+      # ------------------- LAY RETURNS (WINNING)------------------- #
+      lay = Enum.map(lay, fn bet ->
+        user = CubDB.get(users, bet[:user_id])
+        user = Map.put(user, :balance, user[:balance] + ((bet[:original_stake]-bet[:remaining_stake])*bet[:odds]))
+        CubDB.put(users, bet[:user_id], user)
+
+        Map.enum(bet[:matched_bets], fn bet_id ->
+          matched_bet = CubDB.get(bets, bet_id)
+          user = Map.put(user, :balance, user[:balance] + (matched_bet[:original_stake]*bet[:odds]))
+          CubDB.put(users, bet[:user_id], user)
+        end)
+
+        bet = Map.put(bet, :status, {:market_settled, result})
+        CubDB.put(bets, bet[:bet_id], bet)
+        bet
+      end)
+      bets = Map.put(bets, :lay, lay)
+
+      # ------------------- BACK RETURNS (LOOSING)------------------- #
+      back = Enum.map(back, fn bet ->
+        bet = Map.put(bet, :status, {:market_settled, result})
+        CubDB.put(bets, bet[:bet_id], bet)
+        bet
+      end)
+      bets = Map.put(bets, :back, back)
+    end
+
+    Map.put(market, :bets, bets)
+    CubDB.put(markets, id, )
   end
 
   # @spec market_bets(id :: market_id()) :: {:ok, Enumerable.t(bet_id())}
   def handle_call({:market_bets, id}, _, state) do
+    {users, markets, _} = state
 
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
+
+    all_bets = Enum.filter(cancel, fn bet ->
+      bet[:bet_id]
+    end)
+
+    {:reply, all_bets, state}
   end
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}

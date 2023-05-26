@@ -205,8 +205,8 @@ defmodule Market do
       bets = Map.put(bets, :back, back)
     end
 
-    Map.put(market, :bets, bets)
-    CubDB.put(markets, id, )
+    market = Map.put(market, :bets, bets)
+    CubDB.put(markets, id, market)
   end
 
   # @spec market_bets(id :: market_id()) :: {:ok, Enumerable.t(bet_id())}
@@ -219,11 +219,12 @@ defmodule Market do
     lay = bets[:lay]
     cancel = bets[:cancel]
 
-    all_bets = Enum.filter(cancel, fn bet ->
-      bet[:bet_id]
-    end)
+    back_list = List.foldl(back, [], fn (x, acc) -> [x[:bet_id]]++acc end)
+    lay_list = List.foldl(lay, [], fn (x, acc) -> [x[:bet_id]]++acc end)
+    cancel_list = List.foldl(cancel, [], fn (x, acc) -> [x[:bet_id]]++acc end)
 
-    {:reply, all_bets, state}
+    result_list = back_list ++ lay_list ++ cancel_list
+    {:reply, result_list, state}
   end
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}

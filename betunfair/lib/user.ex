@@ -11,9 +11,9 @@ defmodule User do
     size = CubDB.size(users) + 1
     user_id = "u" <> Integer.to_string(size)
     allusers = CubDB.select(users)
-    case Enum.to_list(Stream.filter(allusers, fn {_, %{name: _, id: x, balance: _}} -> x == id end)) do
+    case Enum.to_list(Stream.filter(allusers, fn {_, %{id: x, name: _, balance: _}} -> x == id end)) do
       [] ->
-        CubDB.put(users, user_id, %{name: name, id: id, balance: 0})
+        CubDB.put(users, user_id, %{id: id, name: name, balance: 0})
         {:reply, {:ok, user_id}, {users, bets}}
       _ -> {:reply, {:error, "Given id already exists"}, {users, bets}}
     end
@@ -25,8 +25,8 @@ defmodule User do
       true ->
           case amount >= 0 do
             true ->
-              %{name: name, id: userid, balance: balance} = CubDB.get(users, id, :default)
-              CubDB.put(users, id, %{name: name, id: userid, balance: balance + amount})
+              %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
+              CubDB.put(users, id, %{id: userid, name: name, balance: balance + amount})
               {:reply, :ok, {users, bets}}
             false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
           end
@@ -40,10 +40,10 @@ defmodule User do
       true ->
           case amount >= 0 do
             true ->
-              %{name: name, id: userid, balance: balance} = CubDB.get(users, id, :default)
+              %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
               case balance >= amount do
                 true ->
-                  CubDB.put(users, id, %{name: name, id: userid, balance: balance - amount})
+                  CubDB.put(users, id, %{id: userid, name: name, balance: balance - amount})
                   {:reply, :ok, {users, bets}}
                 false -> {:reply, {:error, "Not enough balance in account"}, {users, bets}}
               end
@@ -65,7 +65,18 @@ defmodule User do
 
   #@spec user_bets(id :: user_id()) :: Enumerable.t(bet_id())
   def handle_call({:user_bets, id}, _, {users, bets}) do
-
+    case CubDB.has_key?(users, id) do
+      true ->
+        allbets = CubDB.select(bets)
+        filteredbets = Stream.filter(allbets, fn {_, map} -> Map.get(map, :user_id, :default) == id end)
+        case Enum.take(filteredbets, 1) == [] do
+          true -> {:reply, {:error, "No bets for given id"}, {users, bets}}
+          false ->
+            userbets = Stream.map(filteredbets, fn {_, map} -> Map.get(map, :user_id, :default) end)
+            {:reply, userbets, {users, bets}}
+        end
+      false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
+    end
   end
 
 end

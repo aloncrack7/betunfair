@@ -8,7 +8,7 @@ defmodule Market do
 
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id}
   def handle_call({:market_create, name, description}, _, state) do
-    market = %{name: name, description: description, status: :active, bets: %{back: [%{user_id: "u1", original_stake: 10, status: :active}], lay: [%{user_id: "u1", original_stake: 5, status: :active}], cancel: [%{"user_id": "u2", original_stake: 3, status: :active}]}}
+    market = %{name: name, description: description, status: :active, bets: %{back: [], lay: [], cancel: []}}
     {_, markets, _} = state
     size = CubDB.size(markets) + 1
     num = Integer.to_string(size)
@@ -82,6 +82,7 @@ defmodule Market do
     bets = Map.put(bets, :cancel, cancel)
 
     market = Map.put(market, :bets, bets)
+    market = Map.put(market, :status, :cancelled)
     CubDB.put(markets, id, market)
 
     {:reply, :ok, state}
@@ -89,6 +90,46 @@ defmodule Market do
 
   # @spec market_freeze(id :: market_id()):: :ok
   def handle_call({:market_freeze, id}, _, state) do
+    {users, markets, _} = state
+
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+    cancel = bets[:cancel]
+
+    back = Enum.map(back, fn map ->
+      matched_bets = map[:matched_bets]
+      if Enum.empty?(matched_bets) do
+        user = CubDB.get(users, map[:user_id])
+        Map.put(user, :balance, user[:balance] + map[:original_stake])
+        CubDB.put(users, map[:user_id], user)
+      end
+    end)
+    bets = Map.put(bets, :back, back)
+
+    lay = Enum.map(lay, fn map ->
+      matched_bets = map[:matched_bets]
+      if Enum.empty?(matched_bets) do
+        user = CubDB.get(users, map[:user_id])
+        Map.put(user, :balance, user[:balance] + map[:original_stake])
+        CubDB.put(users, map[:user_id], user)
+      end
+    end)
+    bets = Map.put(bets, :lay, lay)
+
+    cancel = Enum.map(cancel, fn map ->
+      user = CubDB.get(users, map[:user_id])
+      Map.put(user, :balance, user[:balance] + map[:original_stake])
+      CubDB.put(users, map[:user_id], user)
+    end)
+    bets = Map.put(bets, :cancel, cancel)
+
+    market = Map.put(market, :bets, bets)
+    market = Map.put(market, :status, :frozen)
+    CubDB.put(markets, id, market)
+
+    {:reply, :ok, state}
   end
 
   # @spec market_settle(id :: market_id(), result :: boolean()) :: :ok

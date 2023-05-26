@@ -68,11 +68,11 @@ defmodule User do
     case CubDB.has_key?(users, id) do
       true ->
         allbets = CubDB.select(bets)
-        filteredbets = Stream.filter(allbets, fn {_, map} -> Map.get(map, :user_id, :default) == id end)
+        filteredbets = Stream.filter(allbets, fn {_, map} -> map[:user_id] == id end)
         case Enum.take(filteredbets, 1) == [] do
           true -> {:reply, {:error, "No bets for given id"}, {users, bets}}
           false ->
-            userbets = Stream.map(filteredbets, fn {_, map} -> Map.get(map, :user_id, :default) end)
+            userbets = Stream.map(filteredbets, fn {_, map} -> map[:user_id] end)
             {:reply, userbets, {users, bets}}
         end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}

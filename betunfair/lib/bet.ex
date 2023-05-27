@@ -18,10 +18,8 @@ defmodule Bet do
   end
 
   def insert_bet(bet_type, user_id, market_id, stake, odds, state) do
-    case odds do
-      odds>=100 ->
-      _ ->
-        {:reply, {:error, "The odds are not greater than 100"}, state}
+    case odds >= 100 do
+      true ->
         user=CubDB.get(state[:users], user_id)
         case user do
           nil ->
@@ -31,9 +29,9 @@ defmodule Bet do
             marketStatus=market[:status]
             case marketStatus do
               :active ->
-                balance=user[:balace]
-                case balance do
-                  balance>=stake ->
+                balance=user[:balance]
+                case balance >= stake do
+                  true ->
                     bet_id=%{user_id: user_id, market_id: market_id, time: "#{DateTime.utc_now()}"}
                     bet=%{bet_id: bet_id,
                       bet_type: bet_type,
@@ -52,13 +50,15 @@ defmodule Bet do
                           fn(old, new) ->
                             old[odds]<=new[odds]
                           end)
-                        CubDB.put(state[:markets], market_id, Map.put(market[:bets], :back, new_back_bets))
+                        market = Map.put(market, :bets, Map.put(market[:bets], :back, new_back_bets))
+                        CubDB.put(state[:markets], market_id, market)
                       :lay ->
                         new_lay_bets=insertInPlace(market[:bets][:lay], bet,
                           fn(old, new) ->
                             old[odds]>=new[odds]
                           end)
-                        CubDB.put(state[:markets], market_id, Map.put(market[:bets], :lay, new_lay_bets))
+                        market = Map.put(market, :bets, Map.put(market[:bets], :lay, new_lay_bets))
+                        CubDB.put(state[:markets], market_id, market)
                     end
 
                     user=Map.put(user, :balance, balance-stake)
@@ -66,7 +66,7 @@ defmodule Bet do
 
                     CubDB.put(state[:bets], bet_id, bet)
                     {:reply, bet_id, state}
-                  _ ->
+                  false ->
                     {:reply, {:error, "There is not enough money to make the bet"}, state}
                 end
 
@@ -76,6 +76,8 @@ defmodule Bet do
                 {:reply, {:error, "The market is not open"}, state}
             end
         end
+      false ->
+        {:reply, {:error, "The odds are not greater than 100"}, state}
     end
 
   end
@@ -99,12 +101,12 @@ defmodule Bet do
       :active ->
         elem=Enum.filter(market[:bets][:back]++market[:bets][:lay], fn (x) -> x[:bet_id]==bet_id end)
         |>Enum.at(0)
-        |>Map.put(:bet_type, :cancel)
+        |>Map.put(:status, :cancel)
 
-        cancel_list=elem++market[:bets][:cancel]
+        cancel_list=[elem]++market[:bets][:cancel]
 
-        back_list=List.delete(market[:bets][:back], fn (x) -> x[:bet_id]==bet_id end)
-        lay_list=List.delete(market[:bets][:lay], fn (x) -> x[:bet_id]==bet_id end)
+        back_list=Enum.filter(market[:bets][:back], fn x -> x[:bet_id]!=bet_id end)
+        lay_list=Enum.filter(market[:bets][:lay], fn x -> x[:bet_id]!=bet_id end)
 
         bet_map=%{back: back_list, lay: lay_list, cancel: cancel_list}
 

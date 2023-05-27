@@ -50,7 +50,7 @@ defmodule Market do
 
   # @spec market_cancel(id :: market_id()):: :ok
   def handle_call({:market_cancel, id}, _, state) do
-    {users, markets, _} = state
+    {users, markets, betsDB} = state
 
     market = CubDB.get(markets, id)
     bets = market[:bets]
@@ -64,7 +64,7 @@ defmodule Market do
       user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
       CubDB.put(users, bet[:user_id], user)
       bet = Map.put(bet, :status, :market_cancelled)
-      CubDB.put(bets, bet[:bet_id], bet)
+      CubDB.put(betsDB, bet[:bet_id], bet)
       bet
     end)
     bets = Map.put(bets, :back, back)
@@ -75,7 +75,7 @@ defmodule Market do
       user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
       CubDB.put(users, bet[:user_id], user)
       bet = Map.put(bet, :status, :market_cancelled)
-      CubDB.put(bets, bet[:bet_id], bet)
+      CubDB.put(betsDB, bet[:bet_id], bet)
       bet
     end)
     bets = Map.put(bets, :lay, lay)
@@ -86,7 +86,7 @@ defmodule Market do
       user = Map.put(user, :balance, user[:balance] + bet[:original_stake])
       CubDB.put(users, bet[:user_id], user)
       bet = Map.put(bet, :status, :market_cancelled)
-      CubDB.put(bets, bet[:bet_id], bet)
+      CubDB.put(betsDB, bet[:bet_id], bet)
       bet
     end)
     bets = Map.put(bets, :cancel, cancel)
@@ -143,7 +143,7 @@ defmodule Market do
 
   # @spec market_settle(id :: market_id(), result :: boolean()) :: :ok
   def handle_call({:market_settle, id, result}, _, state) do
-    {users, markets, bets} = state
+    {users, markets, betsDB} = state
 
     market = CubDB.get(markets, id)
     bets = market[:bets]
@@ -158,14 +158,14 @@ defmodule Market do
         user = Map.put(user, :balance, user[:balance] + ((bet[:original_stake]-bet[:remaining_stake])*bet[:odds]))
         CubDB.put(users, bet[:user_id], user)
 
-        Map.enum(bet[:matched_bets], fn bet_id ->
+        Enum.map(bet[:matched_bets], fn bet_id ->
           matched_bet = CubDB.get(bets, bet_id)
           user = Map.put(user, :balance, user[:balance] + (matched_bet[:original_stake]*bet[:odds]))
           CubDB.put(users, bet[:user_id], user)
         end)
 
         bet = Map.put(bet, :status, {:market_settled, result})
-        CubDB.put(bets, bet[:bet_id], bet)
+        CubDB.put(betsDB, bet[:bet_id], bet)
         bet
       end)
       bets = Map.put(bets, :back, back)
@@ -173,7 +173,7 @@ defmodule Market do
       # ------------------- LAY RETURNS (LOOSING)------------------- #
       lay = Enum.map(lay, fn bet ->
         bet = Map.put(bet, :status, {:market_settled, result})
-        CubDB.put(bets, bet[:bet_id], bet)
+        CubDB.put(betsDB, bet[:bet_id], bet)
         bet
       end)
       bets = Map.put(bets, :lay, lay)
@@ -184,14 +184,14 @@ defmodule Market do
         user = Map.put(user, :balance, user[:balance] + ((bet[:original_stake]-bet[:remaining_stake])*bet[:odds]))
         CubDB.put(users, bet[:user_id], user)
 
-        Map.enum(bet[:matched_bets], fn bet_id ->
+        Enum.map(bet[:matched_bets], fn bet_id ->
           matched_bet = CubDB.get(bets, bet_id)
           user = Map.put(user, :balance, user[:balance] + (matched_bet[:original_stake]*bet[:odds]))
           CubDB.put(users, bet[:user_id], user)
         end)
 
         bet = Map.put(bet, :status, {:market_settled, result})
-        CubDB.put(bets, bet[:bet_id], bet)
+        CubDB.put(betsDB, bet[:bet_id], bet)
         bet
       end)
       bets = Map.put(bets, :lay, lay)
@@ -199,7 +199,7 @@ defmodule Market do
       # ------------------- BACK RETURNS (LOOSING)------------------- #
       back = Enum.map(back, fn bet ->
         bet = Map.put(bet, :status, {:market_settled, result})
-        CubDB.put(bets, bet[:bet_id], bet)
+        CubDB.put(betsDB, bet[:bet_id], bet)
         bet
       end)
       bets = Map.put(bets, :back, back)
@@ -207,6 +207,8 @@ defmodule Market do
 
     market = Map.put(market, :bets, bets)
     CubDB.put(markets, id, market)
+
+    {:reply, :ok, state}
   end
 
   # @spec market_bets(id :: market_id()) :: {:ok, Enumerable.t(bet_id())}

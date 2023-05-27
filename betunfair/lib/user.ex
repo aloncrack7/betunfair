@@ -72,7 +72,7 @@ defmodule User do
         case Enum.take(filteredbets, 1) == [] do
           true -> {:reply, {:error, "No bets for given id"}, {users, bets}}
           false ->
-            userbets = Stream.map(filteredbets, fn {_, map} -> map[:user_id] end)
+            userbets = Enum.to_list(Stream.map(filteredbets, fn {_, map} -> map[:bet_id] end))
             {:reply, userbets, {users, bets}}
         end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}

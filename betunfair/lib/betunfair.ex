@@ -9,7 +9,6 @@ defmodule BetUnfair do
     {:ok, markets} = CubDB.start_link("databases/marketsDB")
     {:ok, bets} = CubDB.start_link("databases/betsDB")
 
-
     GenServer.start_link(User, {users, bets}, name: :users_server)
     GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
     GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
@@ -20,19 +19,20 @@ defmodule BetUnfair do
 
   # @spec start_link(name :: string()) :: {:ok, _}
   def start_link(name) do
-    Process.put(:server, name)
     GenServer.start_link(BetUnfair, {}, name: name)
   end
 
   # @spec stop():: :ok
   def stop() do
-    Supervisor.stop(GenServer.server(), :normal)
+    GenServer.stop(:users_server, :normal)
+    GenServer.stop(:markets_server, :normal)
+    GenServer.stop(:bets_server, :normal)
   end
 
   # @spec clean(name :: string()):: :ok
   def clean(name) do
-    CubDB.clear(GenServer.server())
-    Supervisor.stop(GenServer.server(), :normal)
+    File.rm_rf!("databases")
+    stop()
   end
 
   # @spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
@@ -98,24 +98,23 @@ defmodule BetUnfair do
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
   def market_pending_backs(id) do
-    GenServer.call(Process.get(:server, :default), {:market_pending_backs, id})
+    GenServer.call(:markets_server, {:market_pending_backs, id})
   end
 
   # @spec market_pending_lays(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
   def market_pending_lays(id) do
-    GenServer.call(Process.get(:server, :default), {:market_pending_lays, id})
+    GenServer.call(:markets_server, {:market_pending_lays, id})
   end
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
   def market_get(id) do
-    GenServer.call(:marke, {:market_get, id})
+    GenServer.call(:markets_server, {:market_get, id})
   end
 
   # @spec market_match(id :: market_id()) :: :ok
   def market_match(id) do
     GenServer.call(:markets_server, {:market_match, id})
   end
-
 
   # @spec bet_back(user_id :: user_id(), market_id :: market_id(), stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def bet_back(user_id, market_id, stake, odds) do
@@ -125,6 +124,11 @@ defmodule BetUnfair do
   # @spec bet_lay(user_id :: user_id(), market_id :: market_id(), stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def bet_lay(user_id, market_id, stake, odds) do
     GenServer.call(:bets_server, {:bet_lay, user_id, market_id, stake, odds})
+  end
+
+  # @spec bet_cancel(id :: bet_id()):: :ok
+  def bet_cancel(id) do
+    GenServer.call(:bets_server, {:bet_cancel, id})
   end
 
   # @spec bet_get(id :: bet_id()) :: {:ok, %{bet_type: :back | :lay, market_id: market_id(), user_id: user_id(), odds: integer(), original_stake: integer(), remaining_stake: integer(), matched_bets: [bet_id()], status: :active | :cancelled | :market_cancelled | {:market_settled, boolean()}}}

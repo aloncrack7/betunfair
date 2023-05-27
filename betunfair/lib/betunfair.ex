@@ -12,7 +12,7 @@ defmodule BetUnfair do
 
     GenServer.start_link(User, {users, bets}, name: :users_server)
     GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
-    GenServer.start_link(Bet, {bets}, name: :bets_server)
+    GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
 
     {:ok, pid}
   end
@@ -68,12 +68,12 @@ defmodule BetUnfair do
 
   # @spec market_list() :: {:ok, [market_id()]}
   def market_list() do
-    GenServer.call(:markets_server, {:market_list})
+    GenServer.call(:markets_server, :market_list)
   end
 
   # @spec market_list_active() :: {:ok, [market_id()]}
   def market_list_active() do
-    GenServer.call(:markets_server, {:market_list_active})
+    GenServer.call(:markets_server, :market_list_active)
   end
 
   # @spec market_cancel(id :: market_id()) :: :ok

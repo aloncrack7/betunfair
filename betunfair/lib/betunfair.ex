@@ -4,35 +4,43 @@ defmodule BetUnfair do
   import Market
   import Bet
 
-  def init(pid) do
-    {:ok, users} = CubDB.start_link("databases/usersDB")
-    {:ok, markets} = CubDB.start_link("databases/marketsDB")
-    {:ok, bets} = CubDB.start_link("databases/betsDB")
+  def init(name) do
 
-    GenServer.start_link(User, {users, bets}, name: :users_server)
-    GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
-    GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
+    {:ok, users} = CubDB.start_link("databases/#{name}/usersDB")
+    {:ok, markets} = CubDB.start_link("databases/#{name}/marketsDB")
+    {:ok, bets} = CubDB.start_link("databases/#{name}/betsDB")
 
-    {:ok, pid}
+    users_server = GenServer.start_link(User, {users, bets}, name: :users_server)
+    markets_server = GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
+    bets_server = GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
+
+    {:ok, name}
   end
 
 
   # @spec start_link(name :: string()) :: {:ok, _}
   def start_link(name) do
-    GenServer.start_link(BetUnfair, {}, name: name)
+    name = String.to_atom(name)
+    GenServer.start_link(BetUnfair, name, name: name)
   end
 
   # @spec stop():: :ok
   def stop() do
-    GenServer.stop(:users_server, :normal)
-    GenServer.stop(:markets_server, :normal)
-    GenServer.stop(:bets_server, :normal)
+    try do
+      GenServer.stop(:users_server, :normal)
+      GenServer.stop(:markets_server, :normal)
+      GenServer.stop(:bets_server, :normal)
+      {:ok, "Stopped"}
+    catch
+      :exit, {:noproc, _} -> {:error, "No server to stop"}
+    end
   end
 
   # @spec clean(name :: string()):: :ok
   def clean(name) do
-    File.rm_rf!("databases")
+    File.rm_rf!("databases/#{name}")
     stop()
+    {:ok, "Cleaned"}
   end
 
   # @spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}

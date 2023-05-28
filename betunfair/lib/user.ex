@@ -2,8 +2,8 @@ defmodule User do
   import CubDB
   use GenServer
 
-  def init(pid) do
-    {:ok, pid}
+  def init(state) do
+    {:ok, state}
   end
 
   #@spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
@@ -27,7 +27,7 @@ defmodule User do
             true ->
               %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
               CubDB.put(users, id, %{id: userid, name: name, balance: balance + amount})
-              {:reply, :ok, {users, bets}}
+              {:reply, {:ok, "Deposited #{amount}"}, {users, bets}}
             false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
           end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
@@ -44,7 +44,7 @@ defmodule User do
               case balance >= amount do
                 true ->
                   CubDB.put(users, id, %{id: userid, name: name, balance: balance - amount})
-                  {:reply, :ok, {users, bets}}
+                  {:reply, {:ok, "Withdrawed #{amount}"}, {users, bets}}
                 false -> {:reply, {:error, "Not enough balance in account"}, {users, bets}}
               end
             false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
@@ -73,7 +73,7 @@ defmodule User do
           true -> {:reply, {:error, "No bets for given id"}, {users, bets}}
           false ->
             userbets = Enum.to_list(Stream.map(filteredbets, fn {_, map} -> map[:bet_id] end))
-            {:reply, userbets, {users, bets}}
+            {:reply, {:ok, userbets}, {users, bets}}
         end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
     end

@@ -17,69 +17,67 @@ defmodule Bet do
     end
   end
 
-  def insert_bet(bet_type, user_id, market_id, stake, odds, state) do
-    case odds >= 100 do
-      true ->
-        user=CubDB.get(state[:users], user_id)
-        case user do
-          nil ->
-            {:reply, {:error, "There is no user #{user_id}"}, state}
-          _ ->
-            market=CubDB.get(state[:markets], market_id)
-            marketStatus=market[:status]
-            case marketStatus do
-              :active ->
-                balance=user[:balance]
-                case balance >= stake do
-                  true ->
-                    bet_id=%{user_id: user_id, market_id: market_id, time: "#{DateTime.utc_now()}"}
-                    bet=%{bet_id: bet_id,
-                      bet_type: bet_type,
-                      market_id: market_id,
-                      user_id: user_id,
-                      odds: odds,
-                      original_stake: stake,
-                      remaining_stake: stake,
-                      matched_bets: [],
-                      status: :active}
+  def insert_bet(bet_type, user_id, market_id, stake, odds, state) when odds>=100 do
+    user=CubDB.get(state[:users], user_id)
 
-                    case bet_type do
-                      :back ->
-                        new_back_bets=
-                          insertInPlace(market[:bets][:back], bet,
-                          fn(old, new) ->
-                            old[odds]<=new[odds]
-                          end)
-                        market = Map.put(market, :bets, Map.put(market[:bets], :back, new_back_bets))
-                        CubDB.put(state[:markets], market_id, market)
-                      :lay ->
-                        new_lay_bets=insertInPlace(market[:bets][:lay], bet,
-                          fn(old, new) ->
-                            old[odds]>=new[odds]
-                          end)
-                        market = Map.put(market, :bets, Map.put(market[:bets], :lay, new_lay_bets))
-                        CubDB.put(state[:markets], market_id, market)
-                    end
+    if user==nil do
+      {:reply, {:error, "There is no user #{user_id}"}, state}
+    else
+      market=CubDB.get(state[:markets], market_id)
+      marketStatus=market[:status]
+      case marketStatus do
+        :active ->
+          balance=user[:balance]
+          case balance >= stake do
+            true ->
+              bet_id="bb#{CubDB.size(state[:bets])+1}"
+              bet=%{bet_id: bet_id,
+                bet_type: bet_type,
+                market_id: market_id,
+                user_id: user_id,
+                odds: odds,
+                original_stake: stake,
+                remaining_stake: stake,
+                matched_bets: [],
+                status: :active}
 
-                    user=Map.put(user, :balance, balance-stake)
-                    CubDB.put(state[:users], user_id, user)
+              case bet_type do
+                :back ->
+                  new_back_bets=
+                    insertInPlace(market[:bets][:back], bet,
+                    fn(old, new) ->
+                      old[odds]<=new[odds]
+                    end)
+                  market = Map.put(market, :bets, Map.put(market[:bets], :back, new_back_bets))
+                  CubDB.put(state[:markets], market_id, market)
+                :lay ->
+                  new_lay_bets=insertInPlace(market[:bets][:lay], bet,
+                    fn(old, new) ->
+                      old[odds]>=new[odds]
+                    end)
+                  market = Map.put(market, :bets, Map.put(market[:bets], :lay, new_lay_bets))
+                  CubDB.put(state[:markets], market_id, market)
+              end
 
-                    CubDB.put(state[:bets], bet_id, bet)
-                    {:reply, bet_id, state}
-                  false ->
-                    {:reply, {:error, "There is not enough money to make the bet"}, state}
-                end
+              user=Map.put(user, :balance, balance-stake)
+              CubDB.put(state[:users], user_id, user)
 
-              nil ->
-                {:reply, {:error, "There is no market #{market_id}"}, state}
-              _ ->
-                {:reply, {:error, "The market is not open"}, state}
-            end
-        end
-      false ->
-        {:reply, {:error, "The odds are not greater than 100"}, state}
+              CubDB.put(state[:bets], bet_id, bet)
+              {:reply, {:ok, bet_id}, state}
+            false ->
+              {:reply, {:error, "There is not enough money to make the bet"}, state}
+          end
+
+        nil ->
+          {:reply, {:error, "There is no market #{market_id}"}, state}
+        _ ->
+          {:reply, {:error, "The market is not open"}, state}
+      end
     end
+  end
 
+  def insert_bet(bet_type, user_id, market_id, stake, odds, state) when odds<100 do
+    {:reply, {:error, "The odds are not greater than 100"}, state}
   end
 
   # @spec bet_back(user_id :: user_id, market_id :: market_id, stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
@@ -94,7 +92,8 @@ defmodule Bet do
 
   # @spec bet_cancel(id :: bet_id()):: :ok
   def handle_call({:bet_cancel, bet_id}, _, state) do
-    market=CubDB.get(state[:markets], bet_id[:market_id])
+    bet=CubDB.get(state[:bets], bet_id)
+    market=CubDB.get(state[:markets], bet[:market_id])
 
     marketState=market[:status]
     case marketState do
@@ -111,7 +110,7 @@ defmodule Bet do
         bet_map=%{back: back_list, lay: lay_list, cancel: cancel_list}
 
         market=Map.put(market, :bets, bet_map)
-        CubDB.put(state[:markets], bet_id[:market_id], market)
+        CubDB.put(state[:markets], bet[:market_id], market)
 
         CubDB.put(state[:bets], bet_id, elem)
 

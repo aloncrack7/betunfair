@@ -2,8 +2,8 @@ defmodule Market do
   import CubDB
   use GenServer
 
-  def init(pid) do
-    {:ok, pid}
+  def init(state) do
+    {:ok, state}
   end
 
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id}
@@ -95,7 +95,7 @@ defmodule Market do
     market = Map.put(market, :status, :cancelled)
     CubDB.put(markets, id, market)
 
-    {:reply, :ok, state}
+    {:reply, {:ok, "market_cancel"}, state}
   end
 
   # @spec market_freeze(id :: market_id()):: :ok
@@ -138,7 +138,7 @@ defmodule Market do
     market = Map.put(market, :status, :frozen)
     CubDB.put(markets, id, market)
 
-    {:reply, :ok, state}
+    {:reply, {:ok, "freeze"}, state}
   end
 
   # @spec market_settle(id :: market_id(), result :: boolean()) :: :ok
@@ -208,7 +208,7 @@ defmodule Market do
     market = Map.put(market, :bets, bets)
     CubDB.put(markets, id, market)
 
-    {:reply, :ok, state}
+    {:reply, {:ok, "settle"}, state}
   end
 
   # @spec market_bets(id :: market_id()) :: {:ok, Enumerable.t(bet_id())}
@@ -226,7 +226,7 @@ defmodule Market do
     cancel_list = List.foldl(cancel, [], fn (x, acc) -> [x[:bet_id]]++acc end)
 
     result_list = back_list ++ lay_list ++ cancel_list
-    {:reply, result_list, state}
+    {:reply, {:ok, result_list}, state}
   end
 
   # @spec market_pending_backs(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
@@ -246,7 +246,7 @@ defmodule Market do
       {bet[:odds], bet[:bet_id]}
     end)
 
-    {:reply, back_results, state}
+    {:reply, {:ok, back_results}, state}
   end
 
   # @spec market_pending_lays(id :: market_id()) :: {:ok, Enumerable.t({integer(), bet_id()})}
@@ -266,7 +266,7 @@ defmodule Market do
       {bet[:odds], bet[:bet_id]}
     end)
 
-    {:reply, lay_results, state}
+    {:reply, {:ok, lay_results}, state}
   end
 
   # @spec market_get(id :: market_id()()) :: {:ok, %{name: string(), description: string(), status: :active | :frozen | :cancelled | {:settled, result::bool()}}}
@@ -282,5 +282,43 @@ defmodule Market do
 
   # @spec market_match(id :: market_id()):: :ok
   def handle_call({:market_match, id}, _, state) do
+    {_, markets, betsDB} = state
+
+    market = CubDB.get(markets, id)
+    bets = market[:bets]
+    back = bets[:back]
+    lay = bets[:lay]
+
+    if market==nil do
+      {:reply, {:error, "Market doesn't exist"}, state}
+    end
+    if market[:state] == :frozen or market[:state] == :market_cancelled or market[:state] == {:market_settled, false} or market[:state] == {:market_settled, true} do
+      {:reply, {:error, "Market not available: frozen, cancelled or already settled"}, state}
+    else
+      back = Enum.map(back, fn back_bet ->
+          lay = Enum.map(lay, fn lay_bet ->
+            if back_bet[:remaining_stake] >= 0 and lay_bet[:remaining_stake] >= 0 do
+              expected_back = (back_bet[:remaining_stake] * lay_bet[:odds]) - back_bet[:remaining_stake]
+              expected_lay = (lay_bet[:remaining_stake] * lay_bet[:odds]) - lay_bet[:remaining_stake]
+
+              if lay_bet[:remaining_stake] >= expected_back and back_bet[:remaining_stake] >= expected_lay do
+                back_bet = Map.put(back_bet, :matched_bets, [lay_bet[:bet_id]|back_bet[:matched_bets]])
+                lay_bet = Map.put(lay_bet, :matched_bets, [back_bet[:bet_id]|lay_bet[:matched_bets]])
+
+                back_bet = Map.put(back_bet, :remaining_stake, back_bet[:remaining_stake] - expected_lay)
+                lay_bet = Map.put(lay_bet, :remaining_stake, lay_bet[:remaining_stake] - expected_back)
+              end
+            end
+            CubDB.put(betsDB, lay_bet[:bet_id], lay_bet)
+            lay_bet
+          end)
+          CubDB.put(betsDB, back_bet[:bet_id], back_bet)
+          back_bet
+      end)
+      bets = Map.put(bets, :back, back)
+      bets = Map.put(bets, :lay, lay)
+      Map.put(market, :bets, bets)
+      CubDB.put(markets, id, market)
+    end
   end
 end

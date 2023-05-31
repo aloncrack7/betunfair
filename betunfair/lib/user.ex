@@ -8,14 +8,18 @@ defmodule User do
 
   #@spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
   def handle_call({:user_create, id, name}, _, {users, bets}) do
-    size = CubDB.size(users) + 1
-    user_id = "u" <> Integer.to_string(size)
-    allusers = CubDB.select(users)
-    case Enum.to_list(Stream.filter(allusers, fn {_, %{id: x, name: _, balance: _}} -> x == id end)) do
-      [] ->
-        CubDB.put(users, user_id, %{id: id, name: name, balance: 0})
-        {:reply, {:ok, user_id}, {users, bets}}
-      _ -> {:reply, {:error, "Given id already exists"}, {users, bets}}
+    if is_binary(name) == true do
+      size = CubDB.size(users) + 1
+      user_id = "u" <> Integer.to_string(size)
+      allusers = CubDB.select(users)
+      case Enum.to_list(Stream.filter(allusers, fn {_, %{id: x, name: _, balance: _}} -> x == id end)) do
+        [] ->
+          CubDB.put(users, user_id, %{id: id, name: name, balance: 0})
+          {:reply, {:ok, user_id}, {users, bets}}
+        _ -> {:reply, {:error, "Given id already exists"}, {users, bets}}
+      end
+    else
+      {:reply, {:error, "Given name must be a string"}, {users, bets}}
     end
   end
 
@@ -23,12 +27,16 @@ defmodule User do
   def handle_call({:user_deposit, id, amount}, _, {users, bets}) do
     case CubDB.has_key?(users, id) do
       true ->
-          case amount >= 0 do
+          case is_integer(amount) and amount > 0 do
             true ->
-              %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
-              CubDB.put(users, id, %{id: userid, name: name, balance: balance + amount})
-              {:reply, {:ok, "Deposited #{amount}"}, {users, bets}}
-            false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
+              if amount < 100 do
+                {:reply, {:error, "The amount is not greater than 100"}, {users, bets}}
+              else
+                %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
+                CubDB.put(users, id, %{id: userid, name: name, balance: balance + amount})
+                {:reply, :ok, {users, bets}}
+              end
+            false -> {:reply, {:error, "Given amount must be a positive integer"}, {users, bets}}
           end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
     end
@@ -38,16 +46,20 @@ defmodule User do
   def handle_call({:user_withdraw, id, amount}, _,{users, bets}) do
     case CubDB.has_key?(users, id) do
       true ->
-          case amount >= 0 do
+          case is_integer(amount) and amount > 0 do
             true ->
-              %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
-              case balance >= amount do
-                true ->
-                  CubDB.put(users, id, %{id: userid, name: name, balance: balance - amount})
-                  {:reply, {:ok, "Withdrawed #{amount}"}, {users, bets}}
-                false -> {:reply, {:error, "Not enough balance in account"}, {users, bets}}
+              if amount < 100 do
+                {:reply, {:error, "The amount is not greater than 100"}, {users, bets}}
+              else
+                %{id: userid, name: name, balance: balance} = CubDB.get(users, id, :default)
+                case balance >= amount do
+                  true ->
+                    CubDB.put(users, id, %{id: userid, name: name, balance: balance - amount})
+                    {:reply, :ok, {users, bets}}
+                  false -> {:reply, {:error, "Not enough balance in account"}, {users, bets}}
+                end
               end
-            false -> {:reply, {:error, "Given amount must be integer"}, {users, bets}}
+            false -> {:reply, {:error, "Given amount must be a positive integer"}, {users, bets}}
           end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
     end
@@ -73,7 +85,7 @@ defmodule User do
           true -> {:reply, {:error, "No bets for given id"}, {users, bets}}
           false ->
             userbets = Enum.to_list(Stream.map(filteredbets, fn {_, map} -> map[:bet_id] end))
-            {:reply, {:ok, userbets}, {users, bets}}
+            {:reply, userbets, {users, bets}}
         end
       false -> {:reply, {:error, "Given id doesn't exist"}, {users, bets}}
     end

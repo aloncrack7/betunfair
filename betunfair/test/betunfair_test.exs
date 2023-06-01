@@ -1,6 +1,7 @@
 defmodule BetUnfairTest do
   use ExUnit.Case
 
+  # Tests the creation of users, the deposit and withdraw of money and the obtaining of user info
   test "user_create_deposit_withdraw_get" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -15,6 +16,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 1000, id: "33", name: "Alonso"}} = BetUnfair.user_get("u3")
   end
 
+  # Tests the correct generation of errors while using the users operations
   test "user_errors" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -36,6 +38,7 @@ defmodule BetUnfairTest do
     assert is_error(BetUnfair.user_bets(u1))
   end
 
+  # Tests the correct generation of a market and a back bet, and the correct obtaining of the market list and the active market list
   test "bet_back" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -54,6 +57,7 @@ defmodule BetUnfairTest do
     assert 1 = length(markets)
   end
 
+  # Tests the correct generation of a market and some back and lay bets, and the correct obtaining of the user bets for each user
   test "bets_lay_back" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -74,6 +78,7 @@ defmodule BetUnfairTest do
     assert ["bb1"] = BetUnfair.user_bets(u3)
   end
 
+  # Tests the generation of errors while using the markets operations
   test "market_errors" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -95,6 +100,7 @@ defmodule BetUnfairTest do
     assert is_error(BetUnfair.market_match("m2"))
   end
 
+  # Tests the correct matching between the created bets and the correct freezing of the market
   test "bet_match" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -117,6 +123,7 @@ defmodule BetUnfairTest do
     assert 0 = length(markets)
   end
 
+  # Tests the generation of errors while using the bets operations
   test "bets_errors" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -130,6 +137,8 @@ defmodule BetUnfairTest do
     assert is_error(BetUnfair.bet_get("bb1"))
   end
 
+  # Tests the the correct no matching between no matching bets, as well as the correct freezing of the market and the errors produced when trying to operate with the freezed market.
+  # Also, the market is settled and all the money is given back to users
   test "market_no_match" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -160,6 +169,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 2000, id: "u3", name: "Alonso"}} = BetUnfair.user_get(u3)
   end
 
+  # Tests the correct cancellation of the market, as well as the errors produced when trying to operate with the cancelled market
   test "market_cancel" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -191,6 +201,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 2000, id: "u3", name: "Alonso"}} = BetUnfair.user_get(u3)
   end
 
+  # Tests the correct cancellation of a bet after having matched with others
   test "settle_with_cancelled_bets" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -222,6 +233,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 2000, id: "u2", name: "Manuel"}} = BetUnfair.user_get(u2)
   end
 
+  # Tests the correct freezing of a market and the error obtained when trying to create a new bet in afreezing market
   test "market_freeze" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -233,6 +245,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 2000, id: "u1", name: "Tristan"}} = BetUnfair.user_get(u1)
   end
 
+  # Tests the correct matching between the created bets
   test "bet_match_2" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -256,6 +269,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{bet_id: g, bet_type: :lay, market_id: m1, user_id: u2, odds: 153, original_stake: 500, remaining_stake: 0, matched_bets: [c,f], status: :active}} = BetUnfair.bet_get(g)
   end
 
+  # Tests the correct matching between the created bets and the correct distribution of the money after settle the market with true
   test "bet_match_settle_true" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -282,6 +296,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 40000, id: "u2", name: "Manuel"}} = BetUnfair.user_get(u2)
   end
 
+  # Tests the correct matching between the created bets and the correct distribution of the money after settle the market with false
   test "bet_match_settle_false" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -308,6 +323,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 40988, id: "u2", name: "Manuel"}} = BetUnfair.user_get(u2)
   end
 
+  # Tests the correct matching between the created bets
   test "bet_match_3" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -327,6 +343,7 @@ defmodule BetUnfairTest do
     assert {:ok, %{bet_id: c, bet_type: :lay, market_id: m1, user_id: u3, odds: 150, original_stake: 500, remaining_stake: 500, matched_bets: [], status: :active}} = BetUnfair.bet_get(c)
   end
 
+  # Tests the correct docuble matching of the created bets and the correct freezing and distribution of the money
   test "bet_match_freeze_settle" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")

@@ -2,14 +2,21 @@ defmodule Bet do
   import CubDB
   use GenServer
 
+  # The bet managing server is initialize
   def init(state) do
     {:ok, state}
   end
 
+  # Insert a bet in order, the order is defined by fuction
+  # If the list is empty the bet goes there
   def insertInPlace([], bet, _) do
     [bet]
   end
 
+  # Insert a bet in order, the order is defined by fuction
+  # If the list is condition is for the inserting behind is not met,
+  # the new bet will be set into place. In other cases the bet will
+  # be inserted recursively calling this function
   def insertInPlace([h|t], bet, order) do
     case order.(h, bet) do
       true -> [h|insertInPlace(t, bet, order)]
@@ -84,17 +91,14 @@ defmodule Bet do
     {:reply, {:error, "The odds are not an integer greater than 100"}, state}
   end
 
-  # @spec bet_back(user_id :: user_id, market_id :: market_id, stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def handle_call({:bet_back, user_id, market_id, stake, odds}, _, state) do
     insert_bet(:back, user_id, market_id, stake, odds, state)
   end
 
-  # @spec bet_lay(user_id :: user_id(), market_id :: market_id(), stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def handle_call({:bet_lay, user_id, market_id, stake, odds}, _, state) do
     insert_bet(:lay, user_id, market_id, stake, odds, state)
   end
 
-  # @spec bet_cancel(id :: bet_id()):: :ok
   def handle_call({:bet_cancel, bet_id}, _, state) do
     if CubDB.has_key?(state[:bets], bet_id) == false do
       {:reply, {:error, "No bet for given id"}, state}
@@ -136,7 +140,6 @@ defmodule Bet do
     end
   end
 
-  # @spec bet_get(id :: bet_id()) :: {:ok, %{bet_type: :back | :lay, market_id: market_id(), user_id: user_id(), odds: integer(), original_stake: integer(), remaining_stake: integer(), matched_bets: [bet_id()], status: :active | :cancelled | :market_cancelled | {:market_settled, boolean()}}}
   def handle_call({:bet_get, bet_id}, _, state) do
     if CubDB.has_key?(state[:bets], bet_id) == true do
       bet = CubDB.get(state[:bets], bet_id)

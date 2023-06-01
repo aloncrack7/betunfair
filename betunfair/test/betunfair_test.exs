@@ -1,7 +1,7 @@
 defmodule BetUnfairTest do
   use ExUnit.Case
 
-  test "user_create_deposit_get" do
+  test "user_create_deposit_withdraw_get" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
     assert {:ok,u1} = BetUnfair.user_create("11","Tristan")
@@ -69,6 +69,9 @@ defmodule BetUnfairTest do
     assert {:ok,b2} = BetUnfair.bet_back(u1,m1,500,150)
     assert {:ok,b3} = BetUnfair.bet_back(u2,m1,500,120)
     assert {:ok, %{bet_id: b3, bet_type: :back, market_id: m1, user_id: u2, odds: 120, original_stake: 500, remaining_stake: 500, matched_bets: [], status: :active}} = BetUnfair.bet_get(b3)
+    assert ["bb2"] = BetUnfair.user_bets(u1)
+    assert ["bb3"] = BetUnfair.user_bets(u2)
+    assert ["bb1"] = BetUnfair.user_bets(u3)
   end
 
   test "market_errors" do
@@ -230,7 +233,6 @@ defmodule BetUnfairTest do
     assert {:ok, %{balance: 2000, id: "u1", name: "Tristan"}} = BetUnfair.user_get(u1)
   end
 
-
   test "bet_match_2" do
     assert {:ok,_} = BetUnfair.clean("testdb")
     assert {:ok,_} = BetUnfair.start_link("testdb")
@@ -325,7 +327,35 @@ defmodule BetUnfairTest do
     assert {:ok, %{bet_id: c, bet_type: :lay, market_id: m1, user_id: u3, odds: 150, original_stake: 500, remaining_stake: 500, matched_bets: [], status: :active}} = BetUnfair.bet_get(c)
   end
 
-
+  test "bet_match_freeze_settle" do
+    assert {:ok,_} = BetUnfair.clean("testdb")
+    assert {:ok,_} = BetUnfair.start_link("testdb")
+    assert {:ok,u1} = BetUnfair.user_create("u1","Tristan")
+    assert {:ok,u2} = BetUnfair.user_create("u2","Manuel")
+    assert is_ok(BetUnfair.user_deposit(u1,8900))
+    assert is_ok(BetUnfair.user_deposit(u2,42600))
+    assert {:ok,m1} = BetUnfair.market_create("rmw","Real Madrid wins")
+    assert {:ok,a} = BetUnfair.bet_back(u1,m1,2000,300)
+    assert {:ok,b} = BetUnfair.bet_back(u1,m1,1400,200)
+    assert {:ok,c} = BetUnfair.bet_back(u1,m1,500,153)
+    assert {:ok,d} = BetUnfair.bet_lay(u2,m1,2100,150)
+    assert {:ok,e} = BetUnfair.bet_lay(u2,m1,40000,110)
+    assert {:ok,f} = BetUnfair.bet_back(u1,m1,5000,150)
+    assert is_ok(BetUnfair.market_match(m1))
+    assert {:ok,g} = BetUnfair.bet_lay(u2,m1,500,153)
+    assert is_ok(BetUnfair.market_match(m1))
+    assert is_ok(BetUnfair.market_freeze(m1))
+    assert {:ok, %{bet_id: a, bet_type: :back, market_id: m1, user_id: u1, odds: 300, original_stake: 2000, remaining_stake: 2000, matched_bets: [], status: :active}} = BetUnfair.bet_get(a)
+    assert {:ok, %{bet_id: b, bet_type: :back, market_id: m1, user_id: u1, odds: 200, original_stake: 1400, remaining_stake: 1400, matched_bets: [], status: :active}} = BetUnfair.bet_get(b)
+    assert {:ok, %{bet_id: c, bet_type: :back, market_id: m1, user_id: u1, odds: 153, original_stake: 500, remaining_stake: 311, matched_bets: [g], status: :active}} = BetUnfair.bet_get(c)
+    assert {:ok, %{bet_id: d, bet_type: :lay, market_id: m1, user_id: u2, odds: 150, original_stake: 2100, remaining_stake: 0, matched_bets: [f], status: :active}} = BetUnfair.bet_get(d)
+    assert {:ok, %{bet_id: e, bet_type: :lay, market_id: m1, user_id: u2, odds: 110, original_stake: 40000, remaining_stake: 40000, matched_bets: [], status: :active}} = BetUnfair.bet_get(e)
+    assert {:ok, %{bet_id: f, bet_type: :back, market_id: m1, user_id: u1, odds: 150, original_stake: 5000, remaining_stake: 0, matched_bets: [g,d], status: :active}} = BetUnfair.bet_get(f)
+    assert {:ok, %{bet_id: g, bet_type: :lay, market_id: m1, user_id: u2, odds: 153, original_stake: 500, remaining_stake: 0, matched_bets: [c,f], status: :active}} = BetUnfair.bet_get(g)
+    assert is_ok(BetUnfair.market_settle(m1, true))
+    assert {:ok, %{balance: 11500, id: "u1", name: "Tristan"}} = BetUnfair.user_get(u1)
+    assert {:ok, %{balance: 40000, id: "u2", name: "Manuel"}} = BetUnfair.user_get(u2)
+  end
 
 
   defp is_error(:error),do: true

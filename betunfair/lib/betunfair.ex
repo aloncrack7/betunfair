@@ -1,22 +1,22 @@
 defmodule BetUnfair do
   use GenServer
-  import User
-  import Market
-  import Bet
 
   def init(name) do
-
+    # Databases are created or opened using the given name of the exchange
     {:ok, users} = CubDB.start_link("databases/#{name}/usersDB")
     {:ok, markets} = CubDB.start_link("databases/#{name}/marketsDB")
     {:ok, bets} = CubDB.start_link("databases/#{name}/betsDB")
 
-    users_server = GenServer.start_link(User, {users, bets}, name: :users_server)
-    markets_server = GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
-    bets_server = GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
+    # A server for each submodule is initialized. The state will be the databases they need to work
+    GenServer.start_link(User, {users, bets}, name: :users_server)
+    GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
+    GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
 
     {:ok, name}
   end
 
+
+  # ----------------- EXCHANGE INTERACTION ----------------- #
 
   # @spec start_link(name :: string()) :: {:ok, _}
   def start_link(name) do
@@ -26,6 +26,7 @@ defmodule BetUnfair do
 
   # @spec stop():: :ok
   def stop() do
+    # The main server and the servers of each submodule are stopped if they are already started
     try do
       GenServer.stop(:users_server, :normal)
       GenServer.stop(:markets_server, :normal)
@@ -36,12 +37,18 @@ defmodule BetUnfair do
     end
   end
 
+
   # @spec clean(name :: string()):: :ok
   def clean(name) do
+    # The databases are cleaned
     File.rm_rf!("databases/#{name}")
+    # Then, all servers are stopped if they are already started
     stop()
     {:ok, "Cleaned"}
   end
+
+
+  # ----------------- USER INTERACTION ----------------- #
 
   # @spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
   def user_create(id, name) do
@@ -68,6 +75,8 @@ defmodule BetUnfair do
     GenServer.call(:users_server, {:user_bets, id})
   end
 
+
+  # ----------------- MARKET INTERACTION ----------------- #
 
   # @spec market_create(name :: string(), description :: string()) :: {:ok, market_id()}
   def market_create(name, description) do
@@ -123,6 +132,9 @@ defmodule BetUnfair do
   def market_match(id) do
     GenServer.call(:markets_server, {:market_match, id})
   end
+
+
+  # ----------------- BET INTERACTION ----------------- #
 
   # @spec bet_back(user_id :: user_id(), market_id :: market_id(), stake :: integer(), odds :: integer()) :: {:ok, bet_id()}
   def bet_back(user_id, market_id, stake, odds) do

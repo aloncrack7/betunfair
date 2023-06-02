@@ -13,6 +13,7 @@ RUN mix local.rebar --force
 ADD . /workspace/
 WORKDIR /workspace
 
+# Delete the previous build and dependencies
 RUN rm -r _build 
 RUN rm -r deps/
 

@@ -163,32 +163,6 @@ defmodule Bet do
             CubDB.put(state[:markets], bet[:market_id], market)
           end
 
-          # Enum.map(bet[:matched_bets], fn {m_bet_id, value} ->
-          #   matched_bet = CubDB.get(state[:bets], m_bet_id)
-
-          #   matched_bet = Map.put(matched_bet, :remaining_stake, matched_bet[:remaining_stake] + value)
-
-          #   matched_bets_new = Enum.filter(matched_bet[:matched_bets], fn {id, _} -> id != bet_id end)
-          #   matched_bet = Map.put(matched_bet, :matched_bets, matched_bets_new)
-          #   CubDB.put(state[:bets], matched_bet[:bet_id], matched_bet)
-          # end)
-          # CubDB.put(state[:bets], bet_id, bet)
-
-          # # Updates the bet in market: back bets
-          # back_list = Enum.map(market[:bets][:back], fn bet ->
-          #   CubDB.get(state[:bets], bet[:bet_id])
-          # end)
-
-          # # Updates the bet in market: lay bets
-          # lay_list = Enum.map(market[:bets][:lay], fn bet ->
-          #   CubDB.get(state[:bets], bet[:bet_id])
-          # end)
-
-          # # Update the changes to the repsotory
-          # bet_map=%{back: back_list, lay: lay_list}
-          # market=Map.put(market, :bets, bet_map)
-          # CubDB.put(state[:markets], bet[:market_id], market)
-
           {:reply, :ok, state}
         _ ->
           {:reply, {:error, "The market #{bet_id} is not open"}, state}

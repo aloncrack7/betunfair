@@ -1,4 +1,5 @@
 defmodule BetUnfair do
+  import CubDB
   use GenServer
 
   def init(name) do
@@ -7,12 +8,13 @@ defmodule BetUnfair do
     {:ok, markets} = CubDB.start_link("databases/#{name}/marketsDB")
     {:ok, bets} = CubDB.start_link("databases/#{name}/betsDB")
 
-    # A server for each submodule is initialized. The state will be the databases they need to work
-    GenServer.start_link(User, {users, bets}, name: :users_server)
-    GenServer.start_link(Market, {users, markets, bets}, name: :markets_server)
-    GenServer.start_link(Bet, %{markets: markets, users: users, bets: bets}, name: :bets_server)
+    children=[
+      %{id: :users_server, start: {User, :start_link, [{users, bets}]}, restart: :transient},
+      %{id: :markets_server, start: {Market, :start_link, [{users, markets, bets}]}, restart: :transient},
+      %{id: :bets_server, start: {Bet, :start_link, [%{markets: markets, users: users, bets: bets}]}, restart: :transient}
+    ]
 
-    {:ok, name}
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
 
@@ -20,17 +22,19 @@ defmodule BetUnfair do
 
   # @spec start_link(name :: string()) :: {:ok, _}
   def start_link(name) do
-    name = String.to_atom(name)
-    GenServer.start_link(BetUnfair, name, name: name)
+    if not is_atom(name) do
+      name = String.to_atom(name)
+      Supervisor.start_link(BetUnfair, name, name: :main_server)
+    else
+      {:error, "Given exchange name must be an string"}
+    end
   end
 
   # @spec stop():: :ok
   def stop() do
     # The main server and the servers of each submodule are stopped if they are already started
     try do
-      GenServer.stop(:users_server, :normal)
-      GenServer.stop(:markets_server, :normal)
-      GenServer.stop(:bets_server, :normal)
+      Supervisor.stop(:main_server, :normal)
       {:ok, "Stopped"}
     catch
       :exit, {:noproc, _} -> {:error, "No server to stop"}

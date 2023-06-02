@@ -7,6 +7,11 @@ defmodule Bet do
     {:ok, state}
   end
 
+  def start_link(state) do
+    GenServer.start_link(Bet, state, name: :bets_server)
+  end
+
+
   # Insert a bet in order, the order is defined by fuction
   # If the list is empty the bet goes there
   def insertInPlace([], bet, _) do

@@ -6,6 +6,11 @@
     {:ok, state}
   end
 
+  def start_link(state) do
+    GenServer.start_link(Market, state, name: :markets_server)
+  end
+
+
   def handle_call({:market_create, name, description}, _, state) do
     market = %{name: name, description: description, status: :active, bets: %{back: [], lay: []}} # data structure of a market
     {_, markets, _} = state

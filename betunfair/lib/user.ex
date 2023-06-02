@@ -6,6 +6,11 @@ defmodule User do
     {:ok, state}
   end
 
+  def start_link(state) do
+    GenServer.start_link(User, state, name: :users_server)
+  end
+
+
 
   def handle_call({:user_create, id, name}, _, {users, bets}) do
     # We check if the given name is a string

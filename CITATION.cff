@@ -12,12 +12,14 @@ authors:
   - given-names: Tristan
     family-names: Vaquero Povedano
     affiliation: Polytechnic University of Madrid's Student
+    email: tristan.vpovedano@alumnos.upm.es
   - given-names: Manuel
     family-names: Lozano Ramos
     affiliation: Polytechnic University of Madrid's Student
+    email: manuel.lozanor@alumnos.upm.es
   - given-names: Alonso
     family-names: García Velasco
     email: alonso.garcia.velasco@alumnos.upm.es
     affiliation: Polytechnic University of Madrid's Student
 repository-code: >-
-  https://github.com/aloncrack7/AI-Open-Science-Research-Software-Engineering
+  https://github.com/aloncrack7/betunfair

@@ -65,7 +65,7 @@
         # modifying the status bets from the back list and returning all the money to the users
         back = Enum.map(back, fn bet ->
           user = CubDB.get(users, bet[:user_id])
-          user = if bet[:status] == :frozen and (Enum.empty?(bet[:matched_bets]) or bet[:status] == :cancelled) do # check if the money has already been returned in market_freeze (we prevent returning the money twice)
+          user = if bet[:status] == :frozen and Enum.empty?(bet[:matched_bets]) do # check if the money has already been returned in market_freeze (we prevent returning the money twice)
             Map.put(user, :balance, user[:balance]) # money stays the same because it has been returned on market_freeze
           else
             Map.put(user, :balance, user[:balance] + bet[:original_stake]) # return the money to the user
@@ -80,7 +80,7 @@
         # modifying the status bets from the lay list and returning all the money to the users
         lay = Enum.map(lay, fn bet ->
           user = CubDB.get(users, bet[:user_id])
-          user = if bet[:status] == :frozen and (Enum.empty?(bet[:matched_bets]) or bet[:status] == :cancelled) do # check if the money has already been returned in market_freeze (we prevent returning the money twice)
+          user = if bet[:status] == :frozen and Enum.empty?(bet[:matched_bets]) do # check if the money has already been returned in market_freeze (we prevent returning the money twice)
             Map.put(user, :balance, user[:balance]) # money stays the same because it has been returned on market_freeze
           else
             Map.put(user, :balance, user[:balance] + bet[:original_stake]) # return the money to the user
@@ -104,10 +104,10 @@
   end
 
   # Freezes a market and returns the original stake
-  # to the bets that didnt match with any other bet or are cancelled.
+  # to the bets that didnt match with any other bet.
   # In our implementation the market can be freezed if the market state is only active.
   def handle_call({:market_freeze, id}, _, state) do
-    {users, markets, _} = state
+    {users, markets, betsDB} = state
 
     if CubDB.has_key?(markets, id) == false do # check that the market exists
       {:reply, {:error, "No market for given id"}, state}
@@ -120,25 +120,40 @@
         lay = bets[:lay]
 
         # returning all the back bets money to the users who didnt match a bet
-        Enum.map(back, fn bet ->
+        back_list = Enum.map(back, fn bet ->
           matched_bets = bet[:matched_bets]
-          if Enum.empty?(matched_bets) or bet[:status] == :cancelled do # check also if the bet is cancelled because we dont delete matched bets from a cancelled bet
+          bet = if Enum.empty?(matched_bets) do # check also if the bet is cancelled because we dont delete matched bets from a cancelled bet
             user = CubDB.get(users, bet[:user_id])
-            user = Map.put(user, :balance, user[:balance] + bet[:original_stake]) # returning the original stake to the user
+            user = Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # returning the remaining stake to the user
             CubDB.put(users, bet[:user_id], user)
+
+            bet = Map.put(bet, :remaining_stake, 0)
+            CubDB.put(betsDB, bet[:bet_id], bet)
+            bet
+          else
+            bet
           end
         end)
 
         # returning all the lay bets money to the users who didnt match a bet
-        Enum.map(lay, fn bet ->
+        lay_list = Enum.map(lay, fn bet ->
           matched_bets = bet[:matched_bets]
-          if Enum.empty?(matched_bets) or bet[:status] == :cancelled do # check also if the bet is cancelled because we dont delete matched bets from a cancelled bet
+          bet = if Enum.empty?(matched_bets) do # check also if the bet is cancelled because we dont delete matched bets from a cancelled bet
             user = CubDB.get(users, bet[:user_id])
-            user = Map.put(user, :balance, user[:balance] + bet[:original_stake]) # returning the original stake to the user
+            user = Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # returning the original stake to the user
             CubDB.put(users, bet[:user_id], user)
+
+            bet = Map.put(bet, :remaining_stake, 0)
+            CubDB.put(betsDB, bet[:bet_id], bet)
+            bet
+          else
+            bet
           end
         end)
 
+        bets = Map.put(bets, :back, back_list)
+        bets = Map.put(bets, :lay, lay_list)
+        market = Map.put(market, :bets, bets)
         market = Map.put(market, :status, :frozen)
         CubDB.put(markets, id, market)
 
@@ -150,6 +165,8 @@
   end
 
   # Winnings are distributed to winning users according to stakes and odds.
+  # It returns the remaining stake of the cancelled bets if they havent been returned on market freeze.
+  # It returns the original stake of the bets that didnt match with any other bet.
   # In our implementation the market can be settled if the market state is active or frozen.
   def handle_call({:market_settle, id, result}, _, state) do
     {users, markets, betsDB} = state
@@ -170,130 +187,86 @@
           bets = if result == true do
             # ------------------- BACK RETURNS (WINNING)------------------- #
             back = Enum.map(back, fn bet ->
-              bet = if bet[:status] != :cancelled do # check if the bet is cancelled to not return the money
-                user = CubDB.get(users, bet[:user_id])
-                user = if not Enum.empty?(bet[:matched_bets]) do # if the bet has matched with other bets (has winnings)
-                  Map.put(user, :balance, user[:balance] + trunc((bet[:original_stake]-bet[:remaining_stake])*(bet[:odds]/100)) + bet[:remaining_stake]) # the user wins the matched stake * odds + remaining stake
-                else # if the bet didnt match with any other bet
-                  if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned
-                    Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the unmatched bet stake to the user
-                  else
-                    user
-                  end
-                end
-                CubDB.put(users, bet[:user_id], user)
-
-                bet = Map.put(bet, :status, {:market_settled, result}) # update bet state
-                CubDB.put(betsDB, bet[:bet_id], bet)
-                bet
-              else # if the bet is cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if market[:status] != :frozen do # we check if the market is not frozen to see if the cancelled bet stake has been returned on market_freeze
-                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # we return the original stake to the cancelled bet
-                else # if market is freezed, the money to the cancelled bet is returned on market_freezed
+              user = CubDB.get(users, bet[:user_id])
+              user = if not Enum.empty?(bet[:matched_bets]) do # if the bet has matched with other bets (has winnings)
+                Map.put(user, :balance, user[:balance] + trunc((bet[:original_stake]-bet[:remaining_stake])*(bet[:odds]/100)) + bet[:remaining_stake]) # the user wins the matched stake * odds + remaining stake
+              else # if the bet didnt match with any other bet
+                if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned
+                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the unmatched bet stake to the user
+                else
                   user
                 end
-                CubDB.put(users, bet[:user_id], user)
-                bet
               end
+              CubDB.put(users, bet[:user_id], user)
+
+              bet = Map.put(bet, :status, {:market_settled, result}) # update bet state
+              CubDB.put(betsDB, bet[:bet_id], bet)
+              bet
             end)
             bets = Map.put(bets, :back, back)
 
             # ------------------- LAY RETURNS (LOOSING)------------------- #
             lay = Enum.map(lay, fn bet ->
-              bet = if bet[:status] != :cancelled do # we check if the bet is not cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if not Enum.empty?(bet[:matched_bets]) do # if the loosing bet has matched with other bets
-                  Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # we return the remaining stake to the user (unmatched money)
-                else # if the loosing bet is unmatched
-                  if market[:status] != :frozen do # we check if the market is frozen to see if the unmatched stake has been returned
-                    Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if the market is not frozen we return the original stake
-                  else
-                    user
-                  end
-                end
-                CubDB.put(users, bet[:user_id], user)
-
-                bet = Map.put(bet, :status, {:market_settled, result}) # change the bet status
-                CubDB.put(betsDB, bet[:bet_id], bet)
-                bet
-              else # if the bet is cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if market[:status] != :frozen do # we check if the market is not frozen to see if the cancelled bet stake has been returned on market_freeze
-                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # we return the original stake to the cancelled bet
-                else # if market is freezed, the money to the cancelled bet is returned on market_freezed
+              user = CubDB.get(users, bet[:user_id])
+              user = if not Enum.empty?(bet[:matched_bets]) do # if the loosing bet has matched with other bets
+                Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # we return the remaining stake to the user (unmatched money)
+              else # if the loosing bet is unmatched
+                if market[:status] != :frozen do # we check if the market is frozen to see if the unmatched stake has been returned
+                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if the market is not frozen we return the original stake
+                else
                   user
                 end
-                CubDB.put(users, bet[:user_id], user)
-                bet
               end
+              CubDB.put(users, bet[:user_id], user)
+
+              bet = Map.put(bet, :status, {:market_settled, result}) # change the bet status
+              CubDB.put(betsDB, bet[:bet_id], bet)
+              bet
             end)
             bets = Map.put(bets, :lay, lay)
           else
             # ------------------- LAY RETURNS (WINNING)------------------- #
             lay = Enum.map(lay, fn bet ->
-              bet = if bet[:status] != :cancelled do # we check if the bet is not cancelled
-                user = CubDB.get(users, bet[:user_id])
-                # the back stake matched with the lay bet is stored in the matched bet list like this {bet_id, matched_back_stake}
-                # with this implementation, we can calculate the winnings of the lay bet by the sumation of the matched back stakes
-                balance = Enum.reduce(bet[:matched_bets], user[:balance], fn {back_bet_id, value}, acc ->
-                  acc = acc + value
-                end)
-                user = if not Enum.empty?(bet[:matched_bets]) do # if the bet has matched with other bets (has winnings)
-                  Map.put(user, :balance, trunc(balance) + bet[:remaining_stake]) # the user wins the matched stake with the back + remaining stake
-                else # if the bet hasnt match with other bets
-                  if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
-                    Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the unmatched bet stake to the user
-                  else
-                    user
-                  end
-                end
-                CubDB.put(users, bet[:user_id], user)
-
-                bet = Map.put(bet, :status, {:market_settled, result}) # change the market status
-                CubDB.put(betsDB, bet[:bet_id], bet)
-                bet
-              else # if the bet is cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
-                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the cancelled bet stake to the user
+              user = CubDB.get(users, bet[:user_id])
+              # the back stake matched with the lay bet is stored in the matched bet list like this {bet_id, matched_back_stake}
+              # with this implementation, we can calculate the winnings of the lay bet by the sumation of the matched back stakes
+              balance = Enum.reduce(bet[:matched_bets], user[:balance] + bet[:original_stake], fn {back_bet_id, value}, acc ->
+                acc = acc + value
+              end)
+              user = if not Enum.empty?(bet[:matched_bets]) do # if the bet has matched with other bets (has winnings)
+                Map.put(user, :balance, trunc(balance)) # the user wins the matched stake with the back + remaining stake
+              else # if the bet hasnt match with other bets
+                if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
+                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the unmatched bet stake to the user
                 else
                   user
                 end
-                CubDB.put(users, bet[:user_id], user)
-                bet
               end
+              CubDB.put(users, bet[:user_id], user)
+
+              bet = Map.put(bet, :status, {:market_settled, result}) # change the market status
+              CubDB.put(betsDB, bet[:bet_id], bet)
+              bet
             end)
             bets = Map.put(bets, :lay, lay)
 
             # ------------------- BACK RETURNS (LOOSING)------------------- #
             back = Enum.map(back, fn bet ->
-              bet = if bet[:status] != :cancelled do # we check if the bet is not cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if not Enum.empty?(bet[:matched_bets]) do # if the loosing bet matched with other bets
-                  Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # we return the remaining stake to the user
-                else # if the loosing bet is unmatched
-                  if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
-                    Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the bet stake to the user
-                  else
-                    user
-                  end
-                end
-                CubDB.put(users, bet[:user_id], user)
-
-                bet = Map.put(bet, :status, {:market_settled, result}) # change the market status
-                CubDB.put(betsDB, bet[:bet_id], bet)
-                bet
-              else # if the bet is cancelled
-                user = CubDB.get(users, bet[:user_id])
-                user = if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
-                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the cancelled bet stake to the user
+              user = CubDB.get(users, bet[:user_id])
+              user = if not Enum.empty?(bet[:matched_bets]) do # if the loosing bet matched with other bets
+                Map.put(user, :balance, user[:balance] + bet[:remaining_stake]) # we return the remaining stake to the user
+              else # if the loosing bet is unmatched
+                if market[:status] != :frozen do # we check if the market is frozen to see if the money has been returned in market_freeze
+                  Map.put(user, :balance, user[:balance] + bet[:original_stake]) # if not, we return the bet stake to the user
                 else
                   user
                 end
-                CubDB.put(users, bet[:user_id], user)
-                bet
               end
+              CubDB.put(users, bet[:user_id], user)
+
+              bet = Map.put(bet, :status, {:market_settled, result}) # change the market status
+              CubDB.put(betsDB, bet[:bet_id], bet)
+              bet
             end)
             bets = Map.put(bets, :back, back)
           end

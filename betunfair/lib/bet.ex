@@ -132,33 +132,57 @@ defmodule Bet do
         :active ->
           # The bet status is updated
           bet = Map.put(bet, :status, :cancelled)
-
-
-          Enum.map(bet[:matched_bets], fn {m_bet_id, value} ->
-            matched_bet = CubDB.get(state[:bets], m_bet_id)
-
-            matched_bet = Map.put(matched_bet, :remaining_stake, matched_bet[:remaining_stake] + value)
-
-            matched_bets_new = Enum.filter(matched_bet[:matched_bets], fn {id, _} -> id != bet_id end)
-            matched_bet = Map.put(matched_bet, :matched_bets, matched_bets_new)
-            CubDB.put(state[:bets], matched_bet[:bet_id], matched_bet)
-          end)
           CubDB.put(state[:bets], bet_id, bet)
 
-          # Updates the bet in market: back bets
-          back_list = Enum.map(market[:bets][:back], fn bet ->
-            CubDB.get(state[:bets], bet[:bet_id])
-          end)
+          if bet[:bet_type] == :back do
+            back_list = Enum.map(market[:bets][:back], fn bet_back ->
+              bet_back = if bet_back[:bet_id] == bet_id do
+                bet_back = Map.put(bet_back, :status, :cancelled)
+              else
+                bet_back
+              end
+            end)
+            bets = Map.put(market[:bets], :back, back_list)
+            market = Map.put(market, :bets, bets)
+            CubDB.put(state[:markets], bet[:market_id], market)
+          else
+            lay_list = Enum.map(market[:bets][:lay], fn bet_lay ->
+              bet_lay = if bet_lay[:bet_id] == bet_id do
+                bet_lay = Map.put(bet_lay, :status, :cancelled)
+              else
+                bet_lay
+              end
+            end)
+            bets = Map.put(market[:bets], :lay, lay_list)
+            market = Map.put(market, :bets, bets)
+            CubDB.put(state[:markets], bet[:market_id], market)
+          end
 
-          # Updates the bet in market: lay bets
-          lay_list = Enum.map(market[:bets][:lay], fn bet ->
-            CubDB.get(state[:bets], bet[:bet_id])
-          end)
+          # Enum.map(bet[:matched_bets], fn {m_bet_id, value} ->
+          #   matched_bet = CubDB.get(state[:bets], m_bet_id)
 
-          # Update the changes to the repsotory
-          bet_map=%{back: back_list, lay: lay_list}
-          market=Map.put(market, :bets, bet_map)
-          CubDB.put(state[:markets], bet[:market_id], market)
+          #   matched_bet = Map.put(matched_bet, :remaining_stake, matched_bet[:remaining_stake] + value)
+
+          #   matched_bets_new = Enum.filter(matched_bet[:matched_bets], fn {id, _} -> id != bet_id end)
+          #   matched_bet = Map.put(matched_bet, :matched_bets, matched_bets_new)
+          #   CubDB.put(state[:bets], matched_bet[:bet_id], matched_bet)
+          # end)
+          # CubDB.put(state[:bets], bet_id, bet)
+
+          # # Updates the bet in market: back bets
+          # back_list = Enum.map(market[:bets][:back], fn bet ->
+          #   CubDB.get(state[:bets], bet[:bet_id])
+          # end)
+
+          # # Updates the bet in market: lay bets
+          # lay_list = Enum.map(market[:bets][:lay], fn bet ->
+          #   CubDB.get(state[:bets], bet[:bet_id])
+          # end)
+
+          # # Update the changes to the repsotory
+          # bet_map=%{back: back_list, lay: lay_list}
+          # market=Map.put(market, :bets, bet_map)
+          # CubDB.put(state[:markets], bet[:market_id], market)
 
           {:reply, :ok, state}
         _ ->

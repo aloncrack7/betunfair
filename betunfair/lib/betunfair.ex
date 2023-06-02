@@ -1,5 +1,7 @@
 defmodule BetUnfair do
   use GenServer
+use Phoenix.Endpoint, otp_app:
+  import Phoenix.Controller
 
   def init(name) do
     # Databases are created or opened using the given name of the exchange
@@ -49,6 +51,11 @@ defmodule BetUnfair do
 
 
   # ----------------- USER INTERACTION ----------------- #
+
+def user_create(conn, %{id: id, name: name}) do
+    {:ok, user_id}=GenServer.call(:users_server, {:user_create, id, name})
+    render(conn, %{user_id: user_id})
+  end
 
   # @spec user_create(id :: string(), name :: string()) :: {:ok, user_id()}
   def user_create(id, name) do

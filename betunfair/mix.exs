@@ -5,7 +5,7 @@ defmodule Betunfair.MixProject do
     [
       app: :betunfair,
       version: "0.1.0",
-      elixir: "~> 1.9.1",
+      elixir: "> 1.9.1",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -23,7 +23,8 @@ defmodule Betunfair.MixProject do
     [
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
-      {:cubdb, github: "lucaong/cubdb"}
+      {:cubdb, github: "lucaong/cubdb"},
+{:phoenix, "~> 1.5.12"}
     ]
   end
 end
